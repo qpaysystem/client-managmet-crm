@@ -1,0 +1,30 @@
+---
+description: Контекст проекта CRM — стек, фичи, деплой, хостинг
+alwaysApply: true
+---
+
+# client-management-crm — контекст проекта
+
+## Что это
+Laravel 10 CRM: управление клиентами, балансы, транзакции, проекты, квартиры, задачи, личный кабинет клиента, лендинг компании «Периметр Элитного Капитала».
+
+## Стек
+- PHP 8.1+, Laravel 10, MySQL
+- Blade, Bootstrap 5, Bootstrap Icons
+- Личный кабинет: сессии по client_id, маршруты под префиксом /cabinet
+- Админка: /admin, middleware auth
+
+## Реализованные фичи (чтобы не дублировать и не ломать)
+- **Задачи**: у задачи есть project_id и budget; в карточке проекта (ЛК) — вкладка «Задачи» со списком задач по проекту. Модели Task, Project — связь project()->tasks().
+- **Лендинг**: без логотипов в шапке и в герое; сразу баннер (hero-banner.png), потом «Описание компании». Изображения: public/images/hero-banner.png, logo.png. Маршруты в web.php отдают /images/logo.png, /images/hero-banner.png через Laravel (если хостинг не отдаёт статику).
+- **PWA для кабинета**: manifest.json, sw.js, иконки pwa-icon-192/512 (генерируются через PwaIconGenerator из logo.png или создаются по первому запросу). Маршруты для manifest.json, sw.js, иконок в web.php.
+- **Push-уведомления**: при проведении транзакции в админке (ClientController) отправляется push клиенту. Подписка: POST /cabinet/push-subscribe, таблица push_subscriptions. VAPID в config/services.php и .env (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY). Команда php artisan pwa:vapid. Пакет minishlink/web-push.
+
+## Хостинг и деплой
+- Корень сайта на хостинге часто public_html (аналог Laravel public/). Статика и маршруты в web.php отдают файлы, если сервер отдаёт всё в index.php.
+- Composer на хостинге может быть старый: использовать локальный composer.phar в проекте (curl -sS https://getcomposer.org/installer | php, затем php composer.phar install --no-dev).
+- После заливки файлов: php artisan migrate --force, при необходимости php artisan config:clear, php artisan view:clear.
+
+## Важные пути
+- Роуты: routes/web.php. Контроллеры: app/Http/Controllers/Cabinet/CabinetController.php, Admin/ClientController.php, Admin/TaskController.php.
+- Шаблоны кабинета: resources/views/cabinet/, лендинг: resources/views/landing/. Конфиг: config/services.php (jitsi, vapid).
