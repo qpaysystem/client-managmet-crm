@@ -57,12 +57,12 @@ Route::get('/images/pwa-icon-512.png', function () {
     return response()->file($path, ['Content-Type' => 'image/png']);
 });
 
-// Главная — лендинг ломбарда
-Route::get('/', [LandingController::class, 'lombard'])->name('home');
-
-// Стартовая страница компании/CRM (строящиеся объекты) — по желанию
-Route::get('/company', [LandingController::class, 'index'])->name('landing.company');
+// Главная — лендинг компании Периметр Элитного Капитала (строящиеся объекты)
+Route::get('/', [LandingController::class, 'index'])->name('home');
 Route::get('/object/{project}', [LandingController::class, 'project'])->name('landing.project');
+
+// Лендинг ломбарда — по отдельному URL
+Route::get('/lombard', [LandingController::class, 'lombard'])->name('landing.lombard');
 
 // Личный кабинет: страница входа (форма входа или редирект в кабинет, если уже залогинен)
 Route::get('/cabinet', function () {
