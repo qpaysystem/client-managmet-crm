@@ -40,7 +40,7 @@
                     @if($project->site_description)
                     <div class="text-muted mb-3">{!! nl2br(e($project->site_description)) !!}</div>
                     @endif
-                    <p class="mb-0">Телефон для связи: <a href="tel:999999" class="fw-semibold">999 999</a></p>
+                    <p class="mb-0">Телефон для связи: <a href="tel:+73832910051" class="fw-semibold">+7 (383) 291-00-51</a></p>
                 </div>
             </div>
         </div>
@@ -88,14 +88,14 @@
                     @if($apt->entrance)
                     <p class="small text-muted mb-0">Подъезд {{ $apt->entrance }}</p>
                     @endif
-                    <a href="tel:999999" class="btn btn-sm btn-outline-primary mt-2">Узнать подробнее</a>
+                    <a href="tel:+73832910051" class="btn btn-sm btn-outline-primary mt-2">Узнать подробнее</a>
                 </div>
             </div>
         </div>
         @endforeach
     </div>
     @else
-    <p class="text-muted">В данном объекте пока нет свободных квартир. Свяжитесь с нами: <a href="tel:999999">999 999</a></p>
+    <p class="text-muted">В данном объекте пока нет свободных квартир. Свяжитесь с нами: <a href="tel:+73832910051">+7 (383) 291-00-51</a></p>
     @endif
 </div>
 @endsection

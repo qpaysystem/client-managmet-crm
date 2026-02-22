@@ -74,7 +74,7 @@
     <footer class="bg-dark text-light py-4 mt-5">
         <div class="container text-center">
             <p class="mb-1 fw-bold">Периметр Элитного Капитала</p>
-            <p class="mb-2"><a href="tel:999999" class="phone-link text-warning text-decoration-none d-inline-block py-2">999 999</a></p>
+            <p class="mb-2"><a href="tel:+73832910051" class="phone-link text-warning text-decoration-none d-inline-block py-2">+7 (383) 291-00-51</a></p>
             <p class="mb-0"><a href="{{ route('cabinet.login') }}" class="btn btn-outline-warning btn-sm min-touch">Вход в личный кабинет</a></p>
         </div>
     </footer>
