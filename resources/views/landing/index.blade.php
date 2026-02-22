@@ -70,7 +70,7 @@
     <div class="container text-center">
         <h2 class="section-title mb-4">Связаться с нами</h2>
         <p class="lead mb-2">По вопросам приобретения недвижимости и сотрудничества:</p>
-        <a href="tel:+73832910051" class="phone-link fs-3">+7 (383) 291-00-51</a>
+        <a href="tel:999999" class="phone-link fs-3">999 999</a>
     </div>
 </section>
 @endsection
