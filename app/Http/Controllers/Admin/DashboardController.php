@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\BalanceTransaction;
 use App\Models\Client;
+use App\Models\ClientProjectInvestment;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -86,7 +87,34 @@ class DashboardController extends Controller
             $loansByClientList = $loansByClientList->sortByDesc('amount')->values();
         }
 
-        return view('admin.dashboard', compact('stats', 'recentClients', 'loansByClientList'));
+        // Вложения в проект по клиентам (ClientProjectInvestment)
+        $investmentClientIds = ClientProjectInvestment::distinct()->pluck('client_id')->filter()->values()->all();
+        $investmentsByClientList = collect();
+        if ($investmentClientIds !== []) {
+            $clientsWithInvestments = Client::whereIn('id', $investmentClientIds)->orderBy('first_name')->orderBy('last_name')->get();
+            $totalByClient = ClientProjectInvestment::whereIn('client_id', $investmentClientIds)
+                ->selectRaw('client_id, SUM(amount) as total')
+                ->groupBy('client_id')
+                ->pluck('total', 'client_id');
+            $recordsByClient = ClientProjectInvestment::whereIn('client_id', $investmentClientIds)
+                ->with('project')
+                ->orderByDesc('created_at')
+                ->get()
+                ->groupBy('client_id');
+
+            foreach ($clientsWithInvestments as $c) {
+                $total = round((float) ($totalByClient[$c->id] ?? 0), 2);
+                $records = $recordsByClient->get($c->id, collect());
+                $investmentsByClientList->push([
+                    'client' => $c,
+                    'amount' => $total,
+                    'records' => $records,
+                ]);
+            }
+            $investmentsByClientList = $investmentsByClientList->sortByDesc('amount')->values();
+        }
+
+        return view('admin.dashboard', compact('stats', 'recentClients', 'loansByClientList', 'investmentsByClientList'));
     }
 
     public function activity(Request $request)
