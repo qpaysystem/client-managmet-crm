@@ -114,7 +114,42 @@ class DashboardController extends Controller
             $investmentsByClientList = $investmentsByClientList->sortByDesc('amount')->values();
         }
 
-        return view('admin.dashboard', compact('stats', 'recentClients', 'loansByClientList', 'investmentsByClientList'));
+        // Расходы на проект по клиентам (из транзакций — OPERATION_PROJECT_EXPENSE)
+        $expenseClientIds = BalanceTransaction::where('operation_type', BalanceTransaction::OPERATION_PROJECT_EXPENSE)
+            ->distinct()
+            ->pluck('client_id')
+            ->filter()
+            ->values()
+            ->all();
+
+        $expensesByClientList = collect();
+        if ($expenseClientIds !== []) {
+            $clientsWithExpenses = Client::whereIn('id', $expenseClientIds)->orderBy('first_name')->orderBy('last_name')->get();
+            $totalByClient = BalanceTransaction::whereIn('client_id', $expenseClientIds)
+                ->where('operation_type', BalanceTransaction::OPERATION_PROJECT_EXPENSE)
+                ->selectRaw('client_id, SUM(amount) as total')
+                ->groupBy('client_id')
+                ->pluck('total', 'client_id');
+            $transactionsByClient = BalanceTransaction::whereIn('client_id', $expenseClientIds)
+                ->where('operation_type', BalanceTransaction::OPERATION_PROJECT_EXPENSE)
+                ->with(['project', 'projectExpenseItem'])
+                ->orderByDesc('created_at')
+                ->get()
+                ->groupBy('client_id');
+
+            foreach ($clientsWithExpenses as $c) {
+                $total = round((float) ($totalByClient[$c->id] ?? 0), 2);
+                $transactions = $transactionsByClient->get($c->id, collect());
+                $expensesByClientList->push([
+                    'client' => $c,
+                    'amount' => $total,
+                    'transactions' => $transactions,
+                ]);
+            }
+            $expensesByClientList = $expensesByClientList->sortByDesc('amount')->values();
+        }
+
+        return view('admin.dashboard', compact('stats', 'recentClients', 'loansByClientList', 'investmentsByClientList', 'expensesByClientList'));
     }
 
     public function activity(Request $request)
