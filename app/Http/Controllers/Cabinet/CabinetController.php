@@ -218,7 +218,16 @@ class CabinetController extends Controller
             $outstanding = round($loans - $repayments, 2);
             $c = Client::find($cid);
             if ($c) {
-                $loansByClient->push(['client' => $c, 'amount' => $outstanding]);
+                $loanTransactions = BalanceTransaction::where('client_id', $cid)
+                    ->whereIn('operation_type', [BalanceTransaction::OPERATION_LOAN, BalanceTransaction::OPERATION_LOAN_REPAYMENT])
+                    ->with('product')
+                    ->orderByDesc('created_at')
+                    ->get();
+                $loansByClient->push([
+                    'client' => $c,
+                    'amount' => $outstanding,
+                    'transactions' => $loanTransactions,
+                ]);
             }
         }
 

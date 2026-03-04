@@ -64,27 +64,29 @@ git commit -m "Описание изменений"
 git push origin main
 ```
 
-**На сервере** по SSH в каталоге проекта:
+**На сервере** по SSH в каталоге проекта (подставьте свой путь к PHP, если нужно — см. раздел «Проблемы при деплое» ниже):
 ```bash
 cd ~/client-management-crm   # или ваш путь к проекту
 
 git pull origin main
 
+# Composer: если установлен Composer 2 — просто composer; иначе php composer.phar (см. раздел про проблемы)
 composer install --optimize-autoloader --no-dev
 
-php artisan config:clear
-php artisan route:clear
-php artisan view:clear
-php artisan cache:clear
+# Укажите явный путь к PHP, если в PATH старый/битый (например /opt/php56)
+/usr/bin/php artisan config:clear
+/usr/bin/php artisan route:clear
+/usr/bin/php artisan view:clear
+/usr/bin/php artisan cache:clear
 
-php artisan migrate --force
+/usr/bin/php artisan migrate --force
 
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+/usr/bin/php artisan config:cache
+/usr/bin/php artisan route:cache
+/usr/bin/php artisan view:cache
 ```
 
-Кратко: `git pull` → `composer install --no-dev` → очистка кэша → `migrate --force` → при необходимости снова кэш.
+Кратко: `git pull` → `composer install --no-dev` → очистка кэша → `migrate --force` → при необходимости снова кэш. Команда **view:cache** — с одной «e» в конце.
 
 ### Одной командой на сервере (по желанию)
 
@@ -367,6 +369,58 @@ public function boot(): void
     }
 }
 ```
+
+---
+
+## Проблемы при деплое через Git на Timeweb
+
+### 1. Composer: «requires composer-runtime-api ^2.2 -> no matching package found»
+
+На хостинге стоит **Composer 1.x**, а Laravel 10 требует **Composer 2**. Решение — использовать Composer 2 локально в проекте:
+
+**На сервере** в каталоге проекта:
+```bash
+cd ~/client-management-crm
+curl -sS https://getcomposer.org/installer | php
+php composer.phar install --optimize-autoloader --no-dev
+```
+
+Дальше при каждом обновлении вместо `composer install ...` выполняйте:
+```bash
+php composer.phar install --optimize-autoloader --no-dev
+```
+
+Если в PATH уже правильный PHP, но он называется не `php`, подставьте его (например `/usr/bin/php composer.phar install ...`).
+
+### 2. PHP: «No such file or directory» или путь /opt/php56/bin/php
+
+В окружении сервера в PATH прописан старый или несуществующий PHP (например `/opt/php56/bin/php`). Все команды `php` и `composer` нужно запускать с **явным путём к рабочему PHP**.
+
+Узнать путь к PHP:
+```bash
+which php
+# или
+/usr/bin/php -v
+/usr/local/bin/php -v
+```
+
+Дальше везде подставляйте этот путь. Пример (если PHP в `/usr/bin/php`):
+```bash
+/usr/bin/php artisan config:clear
+/usr/bin/php artisan migrate --force
+/usr/bin/php composer.phar install --no-dev   # если используете composer.phar
+```
+
+В скрипте деплоя в начале можно задать переменную:
+```bash
+export PHP=/usr/bin/php
+$PHP artisan config:clear
+$PHP artisan migrate --force
+```
+
+### 3. Опечатка в команде
+
+Команда кэша представлений пишется с одной «e»: **view:cache**, не `view:cachee`.
 
 ---
 
