@@ -46,7 +46,47 @@ class DashboardController extends Controller
             }
         }
 
-        return view('admin.dashboard', compact('stats', 'recentClients'));
+        // Займы клиентов: все клиенты с ненулевым остатком займа или с историей займов
+        $loanClientIds = BalanceTransaction::whereIn('operation_type', [
+            BalanceTransaction::OPERATION_LOAN,
+            BalanceTransaction::OPERATION_LOAN_REPAYMENT,
+        ])->distinct()->pluck('client_id')->filter()->values()->all();
+
+        $loansByClientList = collect();
+        if ($loanClientIds !== []) {
+            $clientsWithLoans = Client::whereIn('id', $loanClientIds)->orderBy('first_name')->orderBy('last_name')->get();
+            $loansSum = BalanceTransaction::whereIn('client_id', $loanClientIds)
+                ->where('operation_type', BalanceTransaction::OPERATION_LOAN)
+                ->selectRaw('client_id, SUM(amount) as total')
+                ->groupBy('client_id')
+                ->pluck('total', 'client_id');
+            $repaymentsSum = BalanceTransaction::whereIn('client_id', $loanClientIds)
+                ->where('operation_type', BalanceTransaction::OPERATION_LOAN_REPAYMENT)
+                ->selectRaw('client_id, SUM(amount) as total')
+                ->groupBy('client_id')
+                ->pluck('total', 'client_id');
+            $transactionsByClient = BalanceTransaction::whereIn('client_id', $loanClientIds)
+                ->whereIn('operation_type', [BalanceTransaction::OPERATION_LOAN, BalanceTransaction::OPERATION_LOAN_REPAYMENT])
+                ->with(['product', 'project', 'projectExpenseItem'])
+                ->orderByDesc('created_at')
+                ->get()
+                ->groupBy('client_id');
+
+            foreach ($clientsWithLoans as $c) {
+                $loans = (float) ($loansSum[$c->id] ?? 0);
+                $repayments = (float) ($repaymentsSum[$c->id] ?? 0);
+                $balance = round($loans - $repayments, 2);
+                $transactions = $transactionsByClient->get($c->id, collect());
+                $loansByClientList->push([
+                    'client' => $c,
+                    'amount' => $balance,
+                    'transactions' => $transactions,
+                ]);
+            }
+            $loansByClientList = $loansByClientList->sortByDesc('amount')->values();
+        }
+
+        return view('admin.dashboard', compact('stats', 'recentClients', 'loansByClientList'));
     }
 
     public function activity(Request $request)
