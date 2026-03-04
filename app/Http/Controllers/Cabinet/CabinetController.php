@@ -45,8 +45,33 @@ class CabinetController extends Controller
     public function transactions(Request $request): View
     {
         $client = $this->getClient($request);
-        $client->load('balanceTransactions.product');
-        return view('cabinet.transactions', compact('client'));
+
+        $query = BalanceTransaction::query()
+            ->where('client_id', $client->id)
+            ->with(['client', 'product', 'project', 'projectExpenseItem'])
+            ->orderByDesc('created_at');
+
+        if ($request->filled('operation_type')) {
+            $query->where('operation_type', $request->get('operation_type'));
+        }
+        if ($request->filled('type')) {
+            $query->where('type', $request->get('type'));
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->get('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->get('date_to'));
+        }
+        if ($request->filled('client_id') && (int) $request->get('client_id') === (int) $client->id) {
+            $query->where('client_id', $request->get('client_id'));
+        }
+
+        $transactions = $query->paginate(30)->withQueryString();
+
+        $clientsForFilter = collect([$client]);
+
+        return view('cabinet.transactions', compact('client', 'transactions', 'clientsForFilter'));
     }
 
     public function board(Request $request): View
