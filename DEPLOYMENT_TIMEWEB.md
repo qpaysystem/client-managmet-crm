@@ -418,7 +418,56 @@ $PHP artisan config:clear
 $PHP artisan migrate --force
 ```
 
-### 3. Опечатка в команде
+### 3. Вместе: «php» не найден и Composer требует ^2.2 (типично для Timeweb)
+
+На хостинге по умолчанию `php` ведёт на несуществующий `/opt/php56/bin/php`, а системный Composer — старый. Делайте всё с **явным путём к PHP**.
+
+**Шаг 1.** Найти рабочий PHP (проверьте по очереди):
+```bash
+/usr/bin/php -v
+# или
+/usr/local/bin/php -v
+# В панели Timeweb: Хостинг → Настройки PHP — там может быть указана версия и путь.
+```
+Пусть рабочий PHP — это `/usr/bin/php` (подставьте свой, если другой).
+
+**Шаг 2.** Скачать Composer 2 в каталог проекта (используйте тот же путь к PHP):
+```bash
+cd ~/client-management-crm
+curl -sS https://getcomposer.org/installer -o composer-setup.php
+/usr/bin/php composer-setup.php --install-dir=. --filename=composer.phar
+rm -f composer-setup.php
+```
+
+**Шаг 3.** Установить зависимости и обновить проект:
+```bash
+/usr/bin/php composer.phar install --optimize-autoloader --no-dev
+/usr/bin/php artisan config:clear
+/usr/bin/php artisan route:clear
+/usr/bin/php artisan view:clear
+/usr/bin/php artisan cache:clear
+/usr/bin/php artisan migrate --force
+/usr/bin/php artisan config:cache
+/usr/bin/php artisan route:cache
+/usr/bin/php artisan view:cache
+```
+
+**При следующих обновлениях** после `git pull` достаточно:
+```bash
+/usr/bin/php composer.phar install --optimize-autoloader --no-dev
+/usr/bin/php artisan config:clear && /usr/bin/php artisan route:clear && /usr/bin/php artisan view:clear && /usr/bin/php artisan cache:clear
+/usr/bin/php artisan migrate --force
+/usr/bin/php artisan config:cache && /usr/bin/php artisan route:cache && /usr/bin/php artisan view:cache
+```
+
+Либо один раз задать переменные и запустить скрипт:
+```bash
+export PHP=/usr/bin/php
+export COMPOSER="/usr/bin/php composer.phar"
+./deploy.sh
+```
+
+### 4. Опечатка в команде
 
 Команда кэша представлений пишется с одной «e»: **view:cache**, не `view:cachee`.
 

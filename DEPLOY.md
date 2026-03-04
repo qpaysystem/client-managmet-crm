@@ -27,11 +27,30 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-Если на хостинге старый PHP не в PATH, задайте переменные перед запуском:
+**Если на сервере «php» не найден и Composer выдаёт «composer-runtime-api ^2.2»** — на Timeweb часто `php` указывает на несуществующий путь. Используйте явный путь к PHP (обычно `/usr/bin/php`). Сначала установите Composer 2 в проект:
+
+```bash
+cd ~/client-management-crm
+curl -sS https://getcomposer.org/installer -o composer-setup.php
+/usr/bin/php composer-setup.php --install-dir=. --filename=composer.phar
+rm -f composer-setup.php
+```
+
+Дальше все команды — с этим PHP:
+```bash
+/usr/bin/php composer.phar install --optimize-autoloader --no-dev
+/usr/bin/php artisan config:clear && /usr/bin/php artisan route:clear && /usr/bin/php artisan view:clear && /usr/bin/php artisan cache:clear
+/usr/bin/php artisan migrate --force
+/usr/bin/php artisan config:cache && /usr/bin/php artisan route:cache && /usr/bin/php artisan view:cache
+```
+
+Подробнее: [DEPLOYMENT_TIMEWEB.md](DEPLOYMENT_TIMEWEB.md) — раздел «Проблемы при деплое», пункт 3.
+
+Если PHP у вас в другом месте (узнать: `which php` или `/usr/local/bin/php -v`), подставьте его вместо `/usr/bin/php`. Для deploy.sh:
 
 ```bash
 export PHP=/usr/bin/php
-export COMPOSER="php composer.phar"   # если используете composer.phar
+export COMPOSER="/usr/bin/php composer.phar"
 ./deploy.sh
 ```
 

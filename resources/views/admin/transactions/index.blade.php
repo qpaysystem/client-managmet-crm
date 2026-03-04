@@ -3,6 +3,14 @@
 @section('content')
 <h1 class="h4 mb-4">Журнал транзакций</h1>
 
+@if(session('success'))
+    <div class="alert alert-success mb-3">{{ session('success') }}</div>
+@endif
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <a href="{{ route('admin.transactions.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Создать транзакцию</a>
+</div>
+
 <form method="get" action="{{ route('admin.transactions.index') }}" class="row g-2 mb-4">
     <div class="col-auto">
         <label class="form-label visually-hidden">Клиент</label>
@@ -87,10 +95,10 @@
                         <td>{{ $t->user?->name ?? '—' }}</td>
                         <td class="text-muted small">{{ Str::limit($t->comment, 50) }}</td>
                         <td class="text-center">
-                            <form method="post" action="{{ route('admin.transactions.destroy', $t) }}" class="d-inline" onsubmit="return confirm('Удалить эту транзакцию? Баланс клиента будет пересчитан.');">
+                            <form method="post" action="{{ route('admin.transactions.destroy', $t) }}" class="d-inline form-delete-transaction" id="form-delete-{{ $t->id }}" data-client="{{ $t->client->full_name }}" data-date="{{ $t->created_at->format('d.m.Y H:i') }}" data-amount="{{ number_format($t->amount, 2) }}">
                                 @csrf
                                 @method('DELETE')
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Удалить транзакцию"><i class="bi bi-trash"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-delete-transaction" title="Удалить транзакцию" data-form-id="form-delete-{{ $t->id }}"><i class="bi bi-trash"></i></button>
                             </form>
                         </td>
                     </tr>
@@ -109,4 +117,58 @@
         </div>
     @endif
 </div>
+
+{{-- Модальное подтверждение удаления транзакции --}}
+<div class="modal fade" id="confirmDeleteTransactionModal" tabindex="-1" aria-labelledby="confirmDeleteTransactionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmDeleteTransactionModalLabel">Удалить транзакцию?</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">Клиент: <strong id="delete-transaction-client"></strong></p>
+                <p class="mb-1">Дата: <strong id="delete-transaction-date"></strong></p>
+                <p class="mb-0">Сумма: <strong id="delete-transaction-amount"></strong> {{ \App\Models\Setting::get('currency', 'RUB') }}</p>
+                <p class="text-muted small mt-2 mb-0">Баланс клиента будет пересчитан. Отменить действие будет нельзя.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteTransactionBtn">Удалить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+(function() {
+    var modalEl = document.getElementById('confirmDeleteTransactionModal');
+    if (!modalEl) return;
+    var modal = new bootstrap.Modal(modalEl);
+    var formToSubmit = null;
+
+    document.querySelectorAll('.btn-delete-transaction').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var formId = this.getAttribute('data-form-id');
+            var form = document.getElementById(formId);
+            if (!form) return;
+            formToSubmit = form;
+            document.getElementById('delete-transaction-client').textContent = form.dataset.client || '—';
+            document.getElementById('delete-transaction-date').textContent = form.dataset.date || '—';
+            document.getElementById('delete-transaction-amount').textContent = form.dataset.amount || '—';
+            modal.show();
+        });
+    });
+
+    document.getElementById('confirmDeleteTransactionBtn').addEventListener('click', function() {
+        if (formToSubmit) {
+            formToSubmit.submit();
+        }
+        modal.hide();
+        formToSubmit = null;
+    });
+})();
+</script>
+@endpush
 @endsection

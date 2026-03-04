@@ -146,6 +146,8 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
 
     Route::resource('users', UserController::class)->except(['show']);
     Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
+    Route::get('transactions/create', [TransactionController::class, 'create'])->name('transactions.create');
+    Route::post('transactions', [TransactionController::class, 'store'])->name('transactions.store');
     Route::delete('transactions/{transaction}', [TransactionController::class, 'destroy'])->name('transactions.destroy');
     Route::get('tasks/board', [AdminTaskController::class, 'board'])->name('tasks.board');
     Route::resource('tasks', AdminTaskController::class)->except(['show']);

@@ -25,6 +25,7 @@ class BalanceTransaction extends Model
         'balance_after',
         'comment',
         'user_id',
+        'created_at',
     ];
 
     public function product(): BelongsTo
