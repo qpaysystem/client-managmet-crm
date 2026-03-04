@@ -17,6 +17,146 @@
 
 ---
 
+## Деплой через Git
+
+Подходит для виртуального хостинга Timeweb с SSH: на сервере хранится клон репозитория, обновления — через `git pull`.
+
+### Первоначальная настройка на сервере (один раз)
+
+1. **Подключитесь по SSH** (данные в панели Timeweb: Хостинг → Сайты → SSH).
+
+2. **Клонируйте репозиторий** в нужную директорию (например, домашняя папка или папка сайта):
+   ```bash
+   cd ~
+   git clone https://github.com/qpaysystem/client-managmet-crm.git client-management-crm
+   cd client-management-crm
+   ```
+   Если репозиторий приватный, настройте SSH-ключ или используйте токен в URL: `https://ТОКЕН@github.com/qpaysystem/client-managmet-crm.git`.
+
+3. **Укажите ветку** (если не `main`):
+   ```bash
+   git checkout main
+   ```
+
+4. **Создайте `.env`** в корне проекта (скопируйте с `.env.example`), подставьте `APP_KEY`, `APP_URL`, данные БД из панели Timeweb. Файл `.env` в `.gitignore`, в репозиторий не попадёт.
+
+5. **Document Root** в панели Timeweb укажите на папку `public` этого проекта (например `~/client-management-crm/public` или полный путь).
+
+6. **Права и зависимости:**
+   ```bash
+   chmod -R 775 storage bootstrap/cache
+   composer install --optimize-autoloader --no-dev
+   php artisan migrate --force
+   php artisan storage:link
+   php artisan config:cache
+   php artisan route:cache
+   php artisan view:cache
+   ```
+
+После этого сайт должен открываться по домену.
+
+### Обновление (выкладка изменений через Git)
+
+**Локально:** делаете правки, коммит, пуш в репозиторий:
+```bash
+git add .
+git commit -m "Описание изменений"
+git push origin main
+```
+
+**На сервере** по SSH в каталоге проекта:
+```bash
+cd ~/client-management-crm   # или ваш путь к проекту
+
+git pull origin main
+
+composer install --optimize-autoloader --no-dev
+
+php artisan config:clear
+php artisan route:clear
+php artisan view:clear
+php artisan cache:clear
+
+php artisan migrate --force
+
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+Кратко: `git pull` → `composer install --no-dev` → очистка кэша → `migrate --force` → при необходимости снова кэш.
+
+### Одной командой на сервере (по желанию)
+
+Можно оформить обновление как скрипт или алиас, например в `~/client-management-crm/deploy.sh` (и не коммитить его в репо, или положить в репо как пример):
+
+```bash
+#!/bin/bash
+cd "$(dirname "$0")"
+git pull origin main
+composer install --optimize-autoloader --no-dev
+php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
+php artisan migrate --force
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+```
+
+Сделать исполняемым: `chmod +x deploy.sh`. Запуск: `./deploy.sh`.
+
+---
+
+## Внесение изменений на боевой сервер
+
+Когда сайт уже работает, обновления можно выкатывать **через Git** (см. раздел «Деплой через Git» выше) или **через SFTP** (ниже).
+
+### Вариант: через SFTP
+
+#### 1. Локально
+
+- Вносите правки в код, при необходимости коммитите в git.
+- Если меняли зависимости в `composer.json`:
+  ```bash
+  composer install --optimize-autoloader --no-dev
+  ```
+- Если меняли маршруты, конфиг или шаблоны — перед загрузкой можно обновить кэш (по желанию):
+  ```bash
+  php artisan config:cache
+  php artisan route:cache
+  php artisan view:cache
+  ```
+
+#### 2. Загрузка файлов на сервер
+
+- В Cursor: **Cmd+Shift+P** → **SFTP: Sync Local -> Remote** (или Upload Active Folder из корня проекта).
+- Файл `.env` не перезаливается — он остаётся тем, что настроен на сервере.
+
+#### 3. На сервере (по SSH или через панель)
+
+Выполнить в корне проекта на боевом сервере:
+
+| Ситуация | Команды |
+|----------|---------|
+| Обычное обновление кода (без новых миграций) | `php artisan config:clear`<br>`php artisan route:clear`<br>`php artisan view:clear`<br>`php artisan cache:clear` |
+| Добавили новые миграции | После загрузки файлов: `php artisan migrate --force` |
+| Добавили новые файлы в `storage/app/public` | `php artisan storage:link` (если симлинка ещё нет) |
+| Меняли зависимости (composer.json) | На сервере: `composer install --optimize-autoloader --no-dev` (если на хостинге есть Composer). Иначе — загружать обновлённую папку `vendor` с локальной машины после `composer install --no-dev`. |
+
+После очистки кэша приложение само пересоберёт конфиг/маршруты/шаблоны при следующих запросах. Если хотите сразу закэшировать для production:
+
+```bash
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+### Краткий чек-лист обновления (SFTP)
+
+- [ ] Локально: правки сделаны, при изменении зависимостей — `composer install --no-dev`
+- [ ] Загрузка: **SFTP: Sync Local -> Remote**
+- [ ] На сервере: очистка кэша (`config:clear`, `route:clear`, `view:clear`, `cache:clear`)
+- [ ] Если были миграции — `php artisan migrate --force`
+
+---
+
 ## Вариант 1: Timeweb Cloud Apps (рекомендуется)
 
 Подходит, если есть репозиторий на GitHub/GitLab/Bitbucket. Автодеплой, SSL, минимум настроек.
