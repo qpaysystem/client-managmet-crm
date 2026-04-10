@@ -1,0 +1,525 @@
+@extends('layouts.admin')
+@section('title', 'ИИ помощник')
+@section('content')
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h4 mb-0">ИИ помощник</h1>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-prompts" data-bs-toggle="tab" data-bs-target="#pane-prompts" type="button" role="tab">Промпт</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-chat" data-bs-toggle="tab" data-bs-target="#pane-chat" type="button" role="tab">Чат</button>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <div class="tab-pane fade show active" id="pane-prompts" role="tabpanel">
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Сохранённые промпты</strong>
+                        <button type="button" class="btn btn-sm btn-primary" id="btn-new-prompt"><i class="bi bi-plus-lg"></i> Новый</button>
+                    </div>
+                    <div class="list-group list-group-flush" id="prompt-list">
+                        @forelse($prompts as $p)
+                            <button type="button"
+                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center prompt-item"
+                                    data-prompt-id="{{ $p->id }}"
+                                    data-prompt-title="{{ e($p->title) }}"
+                                    data-prompt-system="{{ e($p->system_prompt) }}">
+                                <span class="text-truncate" style="max-width: 280px;">
+                                    {{ $p->title }}
+                                    @if($p->is_active) <span class="badge bg-success ms-2">Активный</span> @endif
+                                </span>
+                                <span class="text-muted small">#{{ $p->id }}</span>
+                            </button>
+                        @empty
+                            <div class="p-3 text-muted">Промптов ещё нет.</div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header"><strong>Редактор промпта</strong></div>
+                    <div class="card-body">
+                        <form id="prompt-form">
+                            <input type="hidden" id="prompt-id" value="">
+                            <div class="mb-3">
+                                <label class="form-label">Название</label>
+                                <input type="text" class="form-control" id="prompt-title" required maxlength="255">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">System prompt</label>
+                                <textarea class="form-control" id="prompt-system" rows="10" required></textarea>
+                                <div class="form-text">Используется как system-инструкция для модели.</div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary" id="btn-save-prompt">Сохранить</button>
+                                <button type="button" class="btn btn-outline-success" id="btn-activate-prompt" disabled>Сделать активным</button>
+                                <button type="button" class="btn btn-outline-secondary ms-auto" id="btn-clear-prompt">Очистить</button>
+                            </div>
+                        </form>
+                        <div class="alert alert-danger mt-3 d-none" id="prompt-error"></div>
+                        <div class="alert alert-success mt-3 d-none" id="prompt-success"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="pane-chat" role="tabpanel">
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong>Диалоги</strong>
+                        <button class="btn btn-sm btn-primary" id="btn-new-conv"><i class="bi bi-plus-lg"></i> Новый</button>
+                    </div>
+                    <div class="list-group list-group-flush" id="conv-list">
+                        @forelse($conversations as $c)
+                            <button type="button" class="list-group-item list-group-item-action conv-item"
+                                    data-conv-id="{{ $c->id }}"
+                                    data-conv-title="{{ e($c->title ?? ('Диалог #' . $c->id)) }}">
+                                <div class="d-flex justify-content-between">
+                                    <span class="text-truncate">{{ $c->title ?? ('Диалог #' . $c->id) }}</span>
+                                    <span class="text-muted small">#{{ $c->id }}</span>
+                                </div>
+                            </button>
+                        @empty
+                            <div class="p-3 text-muted">Диалогов ещё нет.</div>
+                        @endforelse
+                    </div>
+                </div>
+
+                <div class="card mt-3">
+                    <div class="card-header"><strong>Контекст (readonly)</strong></div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Поиск</label>
+                            <input type="text" class="form-control form-control-sm" id="ctx-q" placeholder="ФИО клиента / проект / задача">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Клиент</label>
+                            <select class="form-select form-select-sm" id="ctx-client"></select>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Проект</label>
+                            <select class="form-select form-select-sm" id="ctx-project"></select>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label small mb-1">Задача</label>
+                            <select class="form-select form-select-sm" id="ctx-task"></select>
+                        </div>
+                        <div class="form-text mt-2">Выбранный контекст добавляется в system-сообщение при запросе.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong id="chat-title">Чат</strong>
+                        <span class="text-muted small" id="chat-conv-id"></span>
+                    </div>
+                    <div class="card-body" style="height: 420px; overflow:auto;" id="chat-messages">
+                        <div class="text-muted">Выберите диалог слева или создайте новый.</div>
+                    </div>
+                    <div class="card-footer">
+                        <form id="chat-form" class="d-flex gap-2">
+                            <input type="text" class="form-control" id="chat-input" placeholder="Сообщение..." maxlength="10000" autocomplete="off">
+                            <button class="btn btn-primary" type="submit" id="chat-send" disabled>Отправить</button>
+                        </form>
+                        <div class="alert alert-danger mt-2 d-none" id="chat-error"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+(function () {
+    const csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // ----- Prompts -----
+    const promptList = document.getElementById('prompt-list');
+    const promptIdEl = document.getElementById('prompt-id');
+    const promptTitleEl = document.getElementById('prompt-title');
+    const promptSystemEl = document.getElementById('prompt-system');
+    const promptForm = document.getElementById('prompt-form');
+    const btnNewPrompt = document.getElementById('btn-new-prompt');
+    const btnActivatePrompt = document.getElementById('btn-activate-prompt');
+    const btnClearPrompt = document.getElementById('btn-clear-prompt');
+    const promptError = document.getElementById('prompt-error');
+    const promptSuccess = document.getElementById('prompt-success');
+
+    function showPromptError(msg) {
+        promptError.textContent = msg || 'Ошибка';
+        promptError.classList.remove('d-none');
+        promptSuccess.classList.add('d-none');
+    }
+    function showPromptSuccess(msg) {
+        promptSuccess.textContent = msg || 'OK';
+        promptSuccess.classList.remove('d-none');
+        promptError.classList.add('d-none');
+        setTimeout(() => promptSuccess.classList.add('d-none'), 1500);
+    }
+    function clearPromptForm() {
+        promptIdEl.value = '';
+        promptTitleEl.value = '';
+        promptSystemEl.value = '';
+        btnActivatePrompt.disabled = true;
+    }
+    function pickPromptFromButton(btn) {
+        promptIdEl.value = btn.dataset.promptId || '';
+        promptTitleEl.value = btn.dataset.promptTitle || '';
+        promptSystemEl.value = btn.dataset.promptSystem || '';
+        btnActivatePrompt.disabled = !promptIdEl.value;
+    }
+    if (promptList) {
+        promptList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.prompt-item');
+            if (!btn) return;
+            pickPromptFromButton(btn);
+        });
+    }
+    btnNewPrompt && btnNewPrompt.addEventListener('click', clearPromptForm);
+    btnClearPrompt && btnClearPrompt.addEventListener('click', clearPromptForm);
+
+    promptForm && promptForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        promptError.classList.add('d-none');
+        promptSuccess.classList.add('d-none');
+
+        const id = promptIdEl.value;
+        const payload = {
+            title: promptTitleEl.value.trim(),
+            system_prompt: promptSystemEl.value,
+        };
+        try {
+            const url = id
+                ? `{{ route('admin.ai.prompts.update', ['prompt' => '__ID__']) }}`.replace('__ID__', id)
+                : `{{ route('admin.ai.prompts.store') }}`;
+            const method = id ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                showPromptError((data && (data.message || (data.errors && JSON.stringify(data.errors)))) || 'Ошибка сохранения');
+                return;
+            }
+            showPromptSuccess('Сохранено');
+            await reloadPrompts();
+            promptIdEl.value = data.prompt.id;
+            btnActivatePrompt.disabled = false;
+        } catch (err) {
+            showPromptError('Ошибка сети');
+        }
+    });
+
+    btnActivatePrompt && btnActivatePrompt.addEventListener('click', async () => {
+        const id = promptIdEl.value;
+        if (!id) return;
+        try {
+            const url = `{{ route('admin.ai.prompts.activate', ['prompt' => '__ID__']) }}`.replace('__ID__', id);
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                showPromptError('Не удалось активировать');
+                return;
+            }
+            showPromptSuccess('Активировано');
+            await reloadPrompts();
+        } catch (e) {
+            showPromptError('Ошибка сети');
+        }
+    });
+
+    async function reloadPrompts() {
+        const r = await fetch(`{{ route('admin.ai.prompts.index') }}`, {
+            headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
+        });
+        const data = await r.json();
+        const list = document.getElementById('prompt-list');
+        if (!list) return;
+        list.innerHTML = '';
+        (data.prompts || []).forEach((p) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center prompt-item';
+            btn.dataset.promptId = p.id;
+            btn.dataset.promptTitle = p.title || '';
+            btn.dataset.promptSystem = p.system_prompt || '';
+            btn.innerHTML = `
+                <span class="text-truncate" style="max-width: 280px;">
+                    ${escapeHtml(p.title || ('Prompt #' + p.id))}
+                    ${p.is_active ? '<span class="badge bg-success ms-2">Активный</span>' : ''}
+                </span>
+                <span class="text-muted small">#${p.id}</span>
+            `;
+            list.appendChild(btn);
+        });
+        if ((data.prompts || []).length === 0) {
+            const d = document.createElement('div');
+            d.className = 'p-3 text-muted';
+            d.textContent = 'Промптов ещё нет.';
+            list.appendChild(d);
+        }
+    }
+
+    // ----- Chat -----
+    const convList = document.getElementById('conv-list');
+    const btnNewConv = document.getElementById('btn-new-conv');
+    const chatTitle = document.getElementById('chat-title');
+    const chatConvId = document.getElementById('chat-conv-id');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+    const chatError = document.getElementById('chat-error');
+
+    const ctxQ = document.getElementById('ctx-q');
+    const ctxClient = document.getElementById('ctx-client');
+    const ctxProject = document.getElementById('ctx-project');
+    const ctxTask = document.getElementById('ctx-task');
+
+    let currentConversationId = null;
+
+    function setChatError(msg) {
+        chatError.textContent = msg || 'Ошибка';
+        chatError.classList.remove('d-none');
+    }
+    function clearChatError() {
+        chatError.classList.add('d-none');
+    }
+
+    function escapeHtml(s) {
+        return (s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    function renderMessage(role, content) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mb-3';
+        const badge = role === 'assistant'
+            ? '<span class="badge bg-primary">ИИ</span>'
+            : (role === 'user' ? '<span class="badge bg-secondary">Вы</span>' : '<span class="badge bg-light text-dark">System</span>');
+        wrap.innerHTML = `
+            <div class="d-flex align-items-center gap-2 mb-1">${badge}<span class="text-muted small">${role}</span></div>
+            <div class="border rounded p-2 bg-light" style="white-space: pre-wrap;">${escapeHtml(content || '')}</div>
+        `;
+        return wrap;
+    }
+
+    async function loadConversation(convId) {
+        currentConversationId = convId;
+        chatSend.disabled = !currentConversationId;
+        clearChatError();
+        chatMessages.innerHTML = '<div class="text-muted">Загрузка...</div>';
+        try {
+            const url = `{{ route('admin.ai.conversations.show', ['conversation' => '__ID__']) }}`.replace('__ID__', convId);
+            const r = await fetch(url, { headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'} });
+            const data = await r.json();
+            if (!r.ok) {
+                setChatError('Не удалось загрузить диалог');
+                return;
+            }
+            chatTitle.textContent = data.conversation.title || ('Диалог #' + data.conversation.id);
+            chatConvId.textContent = '#' + data.conversation.id;
+            chatMessages.innerHTML = '';
+            (data.messages || []).forEach((m) => {
+                if (m.role === 'system') return; // keep UI clean
+                chatMessages.appendChild(renderMessage(m.role, m.content));
+            });
+            if ((data.messages || []).filter(m => m.role !== 'system').length === 0) {
+                chatMessages.innerHTML = '<div class="text-muted">Сообщений пока нет.</div>';
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        } catch (e) {
+            setChatError('Ошибка сети');
+        }
+    }
+
+    if (convList) {
+        convList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.conv-item');
+            if (!btn) return;
+            loadConversation(btn.dataset.convId);
+        });
+    }
+
+    btnNewConv && btnNewConv.addEventListener('click', async () => {
+        clearChatError();
+        try {
+            const r = await fetch(`{{ route('admin.ai.conversations.store') }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    title: null,
+                    client_id: ctxClient.value || null,
+                    project_id: ctxProject.value || null,
+                    task_id: ctxTask.value || null,
+                }),
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                setChatError('Не удалось создать диалог');
+                return;
+            }
+            await reloadConversations();
+            loadConversation(data.conversation.id);
+        } catch (e) {
+            setChatError('Ошибка сети');
+        }
+    });
+
+    chatForm && chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        clearChatError();
+        const text = (chatInput.value || '').trim();
+        if (!currentConversationId || !text) return;
+        chatInput.value = '';
+        chatMessages.appendChild(renderMessage('user', text));
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        const typing = document.createElement('div');
+        typing.className = 'text-muted small';
+        typing.textContent = 'ИИ печатает...';
+        chatMessages.appendChild(typing);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            const url = `{{ route('admin.ai.messages.store', ['conversation' => '__ID__']) }}`.replace('__ID__', currentConversationId);
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    content: text,
+                    client_id: ctxClient.value || null,
+                    project_id: ctxProject.value || null,
+                    task_id: ctxTask.value || null,
+                }),
+            });
+            const data = await r.json();
+            typing.remove();
+            if (!r.ok || !data.ok) {
+                setChatError('Не удалось получить ответ');
+                return;
+            }
+            chatMessages.appendChild(renderMessage('assistant', data.assistant_message.content || ''));
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            await reloadConversations();
+        } catch (e) {
+            typing.remove();
+            setChatError('Ошибка сети');
+        }
+    });
+
+    async function reloadConversations() {
+        const r = await fetch(`{{ route('admin.ai.conversations.index') }}`, {
+            headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
+        });
+        const data = await r.json();
+        const list = document.getElementById('conv-list');
+        if (!list) return;
+        list.innerHTML = '';
+        (data.conversations || []).forEach((c) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'list-group-item list-group-item-action conv-item';
+            btn.dataset.convId = c.id;
+            btn.dataset.convTitle = c.title || ('Диалог #' + c.id);
+            btn.innerHTML = `
+                <div class="d-flex justify-content-between">
+                    <span class="text-truncate">${escapeHtml(btn.dataset.convTitle)}</span>
+                    <span class="text-muted small">#${c.id}</span>
+                </div>
+            `;
+            list.appendChild(btn);
+        });
+        if ((data.conversations || []).length === 0) {
+            const d = document.createElement('div');
+            d.className = 'p-3 text-muted';
+            d.textContent = 'Диалогов ещё нет.';
+            list.appendChild(d);
+        }
+    }
+
+    // ----- Context search -----
+    function fillSelect(select, items, labelFn) {
+        select.innerHTML = '';
+        const opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.textContent = '— не выбран —';
+        select.appendChild(opt0);
+        (items || []).forEach((item) => {
+            const o = document.createElement('option');
+            o.value = item.id;
+            o.textContent = labelFn(item);
+            select.appendChild(o);
+        });
+    }
+
+    async function reloadContext() {
+        const q = (ctxQ && ctxQ.value) ? ctxQ.value.trim() : '';
+        const url = new URL(`{{ route('admin.ai.context') }}`, window.location.origin);
+        if (q) url.searchParams.set('q', q);
+        url.searchParams.set('limit', '20');
+
+        const r = await fetch(url.toString(), { headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'} });
+        const data = await r.json();
+        fillSelect(ctxClient, data.clients, (c) => `${c.first_name} ${c.last_name}`.trim());
+        fillSelect(ctxProject, data.projects, (p) => p.name);
+        fillSelect(ctxTask, data.tasks, (t) => `#${t.id} ${t.title}` );
+    }
+
+    function debounce(fn, ms) {
+        let t = null;
+        return function () {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, arguments), ms);
+        };
+    }
+
+    if (ctxQ) {
+        ctxQ.addEventListener('input', debounce(reloadContext, 300));
+    }
+
+    // initialize context selects
+    if (ctxClient && ctxProject && ctxTask) {
+        reloadContext();
+    }
+})();
+</script>
+@endpush
+@endsection
+

@@ -22,6 +22,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.custom-fields.index') }}"><i class="bi bi-list-ul"></i> Поля клиентов</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.users.index') }}"><i class="bi bi-person-gear"></i> Пользователи</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.activity') }}"><i class="bi bi-activity"></i> Активность</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.ai.index') }}"><i class="bi bi-stars"></i> ИИ помощник</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.settings.index') }}"><i class="bi bi-gear"></i> Настройки</a></li>
         </ul>
         <hr class="text-secondary">

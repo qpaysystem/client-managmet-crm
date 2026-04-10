@@ -1,0 +1,253 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\AiConversation;
+use App\Models\AiMessage;
+use App\Models\AiPrompt;
+use App\Models\Client;
+use App\Models\Project;
+use App\Models\Task;
+use App\Services\OpenAiChatService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
+
+class AiAssistantController extends Controller
+{
+    public function index(Request $request): View
+    {
+        $prompts = AiPrompt::orderByDesc('is_active')->orderByDesc('id')->get();
+        $activePrompt = $prompts->firstWhere('is_active', true);
+
+        $conversations = AiConversation::query()
+            ->where('created_by_user_id', Auth::id())
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get();
+
+        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations'));
+    }
+
+    public function promptsIndex(): JsonResponse
+    {
+        $prompts = AiPrompt::orderByDesc('is_active')->orderByDesc('id')->get();
+        return response()->json(['prompts' => $prompts]);
+    }
+
+    public function promptsStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'system_prompt' => 'required|string|max:20000',
+        ]);
+
+        $prompt = AiPrompt::create([
+            'title' => $validated['title'],
+            'system_prompt' => $validated['system_prompt'],
+            'is_active' => false,
+            'created_by_user_id' => Auth::id(),
+        ]);
+
+        return response()->json(['ok' => true, 'prompt' => $prompt]);
+    }
+
+    public function promptsUpdate(Request $request, AiPrompt $prompt): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'system_prompt' => 'required|string|max:20000',
+        ]);
+
+        $prompt->update($validated);
+
+        return response()->json(['ok' => true, 'prompt' => $prompt->fresh()]);
+    }
+
+    public function promptsActivate(AiPrompt $prompt): JsonResponse
+    {
+        AiPrompt::where('is_active', true)->update(['is_active' => false]);
+        $prompt->update(['is_active' => true]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function conversationsIndex(): JsonResponse
+    {
+        $conversations = AiConversation::query()
+            ->where('created_by_user_id', Auth::id())
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        return response()->json(['conversations' => $conversations]);
+    }
+
+    public function conversationsStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => 'nullable|string|max:255',
+            'client_id' => 'nullable|exists:clients,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'task_id' => 'nullable|exists:tasks,id',
+        ]);
+
+        $conversation = AiConversation::create([
+            'title' => $validated['title'] ?? null,
+            'created_by_user_id' => Auth::id(),
+            'client_id' => $validated['client_id'] ?? null,
+            'project_id' => $validated['project_id'] ?? null,
+            'task_id' => $validated['task_id'] ?? null,
+        ]);
+
+        return response()->json(['ok' => true, 'conversation' => $conversation]);
+    }
+
+    public function conversationsShow(AiConversation $conversation): JsonResponse
+    {
+        $this->authorizeConversation($conversation);
+
+        $messages = $conversation->messages()
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'conversation' => $conversation,
+            'messages' => $messages,
+        ]);
+    }
+
+    public function messagesStore(Request $request, AiConversation $conversation, OpenAiChatService $chat): JsonResponse
+    {
+        $this->authorizeConversation($conversation);
+
+        $validated = $request->validate([
+            'content' => 'required|string|max:10000',
+            'client_id' => 'nullable|exists:clients,id',
+            'project_id' => 'nullable|exists:projects,id',
+            'task_id' => 'nullable|exists:tasks,id',
+        ]);
+
+        $conversation->fill([
+            'client_id' => $validated['client_id'] ?? $conversation->client_id,
+            'project_id' => $validated['project_id'] ?? $conversation->project_id,
+            'task_id' => $validated['task_id'] ?? $conversation->task_id,
+        ]);
+        $conversation->save();
+
+        $userMessage = AiMessage::create([
+            'conversation_id' => $conversation->id,
+            'role' => AiMessage::ROLE_USER,
+            'content' => $validated['content'],
+        ]);
+
+        $context = $this->buildContext($conversation);
+        $result = $chat->reply($conversation, $context);
+
+        $assistantMessage = AiMessage::create([
+            'conversation_id' => $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'content' => $result['content'],
+            'token_usage' => $result['usage'] ?? null,
+        ]);
+
+        $conversation->touch();
+
+        return response()->json([
+            'ok' => true,
+            'user_message' => $userMessage,
+            'assistant_message' => $assistantMessage,
+        ]);
+    }
+
+    public function context(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'q' => 'nullable|string|max:200',
+            'limit' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        $q = trim((string) ($validated['q'] ?? ''));
+        $limit = (int) ($validated['limit'] ?? 20);
+
+        $clients = Client::query()
+            ->when($q !== '', function ($query) use ($q) {
+                $query->search($q);
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit($limit)
+            ->get(['id', 'first_name', 'last_name', 'phone', 'email', 'balance', 'status']);
+
+        $projects = Project::query()
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where('name', 'like', "%{$q}%");
+            })
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name']);
+
+        $tasks = Task::query()
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where('title', 'like', "%{$q}%");
+            })
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get(['id', 'title', 'status', 'project_id', 'responsible_user_id', 'client_id']);
+
+        return response()->json([
+            'clients' => $clients,
+            'projects' => $projects,
+            'tasks' => $tasks,
+        ]);
+    }
+
+    private function authorizeConversation(AiConversation $conversation): void
+    {
+        if ((int) $conversation->created_by_user_id !== (int) Auth::id()) {
+            abort(403);
+        }
+    }
+
+    private function buildContext(AiConversation $conversation): array
+    {
+        $client = $conversation->client_id ? Client::find($conversation->client_id) : null;
+        $project = $conversation->project_id ? Project::find($conversation->project_id) : null;
+        $task = $conversation->task_id ? Task::with(['responsibleUser', 'project', 'client'])->find($conversation->task_id) : null;
+
+        return [
+            'client' => $client ? [
+                'id' => $client->id,
+                'full_name' => $client->full_name,
+                'phone' => $client->phone,
+                'email' => $client->email,
+                'status' => $client->status,
+                'balance' => (string) $client->balance,
+            ] : null,
+            'project' => $project ? [
+                'id' => $project->id,
+                'name' => $project->name,
+            ] : null,
+            'task' => $task ? [
+                'id' => $task->id,
+                'title' => $task->title,
+                'description' => $task->description,
+                'status' => $task->status,
+                'status_label' => $task->status_label,
+                'due_date' => $task->due_date?->format('Y-m-d'),
+                'responsible_user' => $task->responsibleUser ? [
+                    'id' => $task->responsibleUser->id,
+                    'name' => $task->responsibleUser->name,
+                ] : null,
+                'project' => $task->project ? ['id' => $task->project->id, 'name' => $task->project->name] : null,
+                'client' => $task->client ? ['id' => $task->client->id, 'full_name' => $task->client->full_name] : null,
+            ] : null,
+        ];
+    }
+}
+

@@ -5,6 +5,11 @@ return [
         'public' => env('VAPID_PUBLIC_KEY', ''),
         'private' => env('VAPID_PRIVATE_KEY', ''),
     ],
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY', ''),
+        'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+    ],
     'jitsi' => [
         // Базовый URL сервера Jitsi Meet (без завершающего слэша).
         // Публичный: https://meet.jit.si

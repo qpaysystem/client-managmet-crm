@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\AiAssistantController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Frontend\ClientController as FrontendClientController;
 use App\Http\Controllers\Frontend\TaskController as FrontendTaskController;
@@ -179,4 +180,20 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
 
     Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
     Route::post('settings', [SettingController::class, 'store'])->name('settings.store');
+
+    // AI assistant
+    Route::get('ai', [AiAssistantController::class, 'index'])->name('ai.index');
+    Route::get('ai/context', [AiAssistantController::class, 'context'])->name('ai.context');
+
+    // Prompts
+    Route::get('ai/prompts', [AiAssistantController::class, 'promptsIndex'])->name('ai.prompts.index');
+    Route::post('ai/prompts', [AiAssistantController::class, 'promptsStore'])->name('ai.prompts.store');
+    Route::put('ai/prompts/{prompt}', [AiAssistantController::class, 'promptsUpdate'])->name('ai.prompts.update');
+    Route::post('ai/prompts/{prompt}/activate', [AiAssistantController::class, 'promptsActivate'])->name('ai.prompts.activate');
+
+    // Conversations
+    Route::get('ai/conversations', [AiAssistantController::class, 'conversationsIndex'])->name('ai.conversations.index');
+    Route::post('ai/conversations', [AiAssistantController::class, 'conversationsStore'])->name('ai.conversations.store');
+    Route::get('ai/conversations/{conversation}', [AiAssistantController::class, 'conversationsShow'])->name('ai.conversations.show');
+    Route::post('ai/conversations/{conversation}/messages', [AiAssistantController::class, 'messagesStore'])->name('ai.messages.store');
 });
