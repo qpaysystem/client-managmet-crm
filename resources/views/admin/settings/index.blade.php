@@ -54,20 +54,27 @@
     </div>
     <div class="card mb-4">
         <div class="card-body">
-            <h5 class="card-title">OpenAI (ИИ помощник)</h5>
-            <p class="text-muted small mb-3">Ключ хранится в базе настроек. Поле «API key» оставьте пустым, если не хотите менять текущий ключ.</p>
+            <h5 class="card-title">ИИ помощник</h5>
+            <p class="text-muted small mb-3">Настройки провайдера для вкладки «ИИ помощник». Поле «API key» оставьте пустым, если не хотите менять текущий ключ.</p>
+            <div class="mb-3">
+                <label class="form-label">Провайдер</label>
+                <select name="ai_provider" class="form-select">
+                    <option value="openai" @selected(($settings['ai_provider'] ?? 'openai') === 'openai')>OpenAI</option>
+                    <option value="deepseek" @selected(($settings['ai_provider'] ?? 'openai') === 'deepseek')>DeepSeek</option>
+                </select>
+            </div>
             <div class="mb-3">
                 <label class="form-label">API key</label>
-                <input type="password" name="openai_api_key" class="form-control" value="" placeholder="sk-...">
+                <input type="password" name="ai_api_key" class="form-control" value="" placeholder="sk-...">
             </div>
             <div class="mb-3">
                 <label class="form-label">Model</label>
-                <input type="text" name="openai_model" class="form-control" value="{{ $settings['openai_model'] ?? '' }}" placeholder="gpt-4.1-mini">
+                <input type="text" name="ai_model" class="form-control" value="{{ $settings['ai_model'] ?? '' }}" placeholder="gpt-4.1-mini / deepseek-chat">
             </div>
             <div class="mb-0">
                 <label class="form-label">Base URL</label>
-                <input type="text" name="openai_base_url" class="form-control" value="{{ $settings['openai_base_url'] ?? '' }}" placeholder="https://api.openai.com/v1">
-                <div class="form-text">Нужно только если используешь прокси/свой gateway.</div>
+                <input type="text" name="ai_base_url" class="form-control" value="{{ $settings['ai_base_url'] ?? '' }}" placeholder="https://api.openai.com/v1 / https://api.deepseek.com/v1">
+                <div class="form-text">Нужно только если используешь прокси/свой gateway. Можно без `/v1`.</div>
             </div>
         </div>
     </div>

@@ -16,14 +16,19 @@ class OpenAiChatService
      */
     public function reply(AiConversation $conversation, array $context = []): array
     {
-        $apiKey = (string) Setting::get('openai_api_key', config('services.openai.api_key'));
-        $model = (string) Setting::get('openai_model', config('services.openai.model'));
-        $baseUrlRaw = (string) Setting::get('openai_base_url', config('services.openai.base_url', 'https://api.openai.com/v1'));
-        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw);
+        $provider = (string) Setting::get('ai_provider', 'openai');
+        if (!in_array($provider, ['openai', 'deepseek'], true)) {
+            $provider = 'openai';
+        }
+
+        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
+        $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
+        $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
+        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
 
         if ($apiKey === '') {
             return [
-                'content' => 'OpenAI API key is not configured.',
+                'content' => 'AI API key is not configured.',
             ];
         }
 
@@ -117,12 +122,13 @@ class OpenAiChatService
         return "CONTEXT (readonly CRM data):\n{$json}";
     }
 
-    private function normalizeBaseUrl(string $raw): string
+    private function normalizeBaseUrl(string $raw, string $provider): string
     {
         $raw = trim($raw);
-        $url = rtrim($raw !== '' ? $raw : 'https://api.openai.com/v1', '/');
+        $default = $provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1';
+        $url = rtrim($raw !== '' ? $raw : $default, '/');
 
-        // Accept either https://api.openai.com or https://api.openai.com/v1
+        // Accept either https://host or https://host/v1
         if (!str_ends_with($url, '/v1') && !str_contains($url, '/v1/')) {
             $url .= '/v1';
         }

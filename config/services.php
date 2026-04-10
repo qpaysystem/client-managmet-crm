@@ -10,6 +10,11 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
         'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
     ],
+    'deepseek' => [
+        'api_key' => env('DEEPSEEK_API_KEY', ''),
+        'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
+        'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
+    ],
     'jitsi' => [
         // Базовый URL сервера Jitsi Meet (без завершающего слэша).
         // Публичный: https://meet.jit.si
