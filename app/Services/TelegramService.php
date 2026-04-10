@@ -58,10 +58,14 @@ class TelegramService
         $responsible = $task->responsibleUser ? self::escapeMarkdown($task->responsibleUser->name) : '—';
         $status = $task->status_label;
         $due = $task->due_date ? $task->due_date->format('d.m.Y') : '—';
+        $description = $task->description ? self::escapeMarkdown(\Illuminate\Support\Str::limit($task->description, 800)) : null;
         $text = "✅ *Задача создана*\n";
         $text .= "Название: {$title}\n";
         $text .= "Проект: {$projectName}\n";
         $text .= "Ответственный: {$responsible}\n";
+        if ($description) {
+            $text .= "Описание: {$description}\n";
+        }
         $text .= "Статус: {$status}\n";
         $text .= "Дата окончания: {$due}\n";
         $text .= "\n_" . $task->created_at->format('d.m.Y H:i') . "_";
@@ -84,10 +88,14 @@ class TelegramService
         $responsible = $task->responsibleUser ? self::escapeMarkdown($task->responsibleUser->name) : '—';
         $status = $task->status_label;
         $due = $task->due_date ? $task->due_date->format('d.m.Y') : '—';
+        $description = $task->description ? self::escapeMarkdown(\Illuminate\Support\Str::limit($task->description, 800)) : null;
         $text = "✏️ *Задача изменена*\n";
         $text .= "Название: {$title}\n";
         $text .= "Проект: {$projectName}\n";
         $text .= "Ответственный: {$responsible}\n";
+        if ($description) {
+            $text .= "Описание: {$description}\n";
+        }
         $text .= "Статус: {$status}\n";
         $text .= "Дата окончания: {$due}\n";
         $text .= "\n_" . now()->format('d.m.Y H:i') . "_";
