@@ -27,7 +27,7 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-**Если на сервере «php» не найден и Composer выдаёт «composer-runtime-api ^2.2»** — на Timeweb часто `php` указывает на несуществующий путь. Используйте явный путь к PHP (обычно `/usr/bin/php`). Сначала установите Composer 2 в проект:
+**Если на сервере «php» не найден и Composer выдаёт «composer-runtime-api ^2.2»** — на Timeweb иногда `php` указывает не туда. Используйте явный путь к PHP (часто `/usr/bin/php`) или алиас вроде `php81`. Сначала установите Composer 2 в проект:
 
 ```bash
 cd ~/client-management-crm
@@ -49,7 +49,7 @@ rm -f composer-setup.php
 Если PHP у вас в другом месте (узнать: `which php` или `/usr/local/bin/php -v`), подставьте его вместо `/usr/bin/php`. Для deploy.sh:
 
 ```bash
-export PHP=/usr/bin/php
+export PHP="$(command -v php)"   # или: export PHP=/usr/bin/php / export PHP=php81
 export COMPOSER="/usr/bin/php composer.phar"
 ./deploy.sh
 ```

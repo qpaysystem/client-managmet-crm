@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 
-PHP="${PHP:-/usr/bin/php}"
+PHP="${PHP:-php}"
 COMPOSER="${COMPOSER:-composer}"
 if [ -f composer.phar ]; then
   COMPOSER="$PHP composer.phar"
