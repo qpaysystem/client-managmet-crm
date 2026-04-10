@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiPrompt;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -15,9 +16,10 @@ class OpenAiChatService
      */
     public function reply(AiConversation $conversation, array $context = []): array
     {
-        $apiKey = (string) config('services.openai.api_key');
-        $model = (string) config('services.openai.model');
-        $baseUrl = rtrim((string) config('services.openai.base_url', 'https://api.openai.com/v1'), '/');
+        $apiKey = (string) Setting::get('openai_api_key', config('services.openai.api_key'));
+        $model = (string) Setting::get('openai_model', config('services.openai.model'));
+        $baseUrlRaw = (string) Setting::get('openai_base_url', config('services.openai.base_url', 'https://api.openai.com/v1'));
+        $baseUrl = rtrim($baseUrlRaw !== '' ? $baseUrlRaw : 'https://api.openai.com/v1', '/');
 
         if ($apiKey === '') {
             return [

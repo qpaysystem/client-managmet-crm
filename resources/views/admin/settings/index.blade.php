@@ -52,6 +52,25 @@
             </div>
         </div>
     </div>
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">OpenAI (ИИ помощник)</h5>
+            <p class="text-muted small mb-3">Ключ хранится в базе настроек. Поле «API key» оставьте пустым, если не хотите менять текущий ключ.</p>
+            <div class="mb-3">
+                <label class="form-label">API key</label>
+                <input type="password" name="openai_api_key" class="form-control" value="" placeholder="sk-...">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Model</label>
+                <input type="text" name="openai_model" class="form-control" value="{{ $settings['openai_model'] ?? '' }}" placeholder="gpt-4.1-mini">
+            </div>
+            <div class="mb-0">
+                <label class="form-label">Base URL</label>
+                <input type="text" name="openai_base_url" class="form-control" value="{{ $settings['openai_base_url'] ?? '' }}" placeholder="https://api.openai.com/v1">
+                <div class="form-text">Нужно только если используешь прокси/свой gateway.</div>
+            </div>
+        </div>
+    </div>
     <button type="submit" class="btn btn-primary">Сохранить настройки</button>
 </form>
 @endsection
