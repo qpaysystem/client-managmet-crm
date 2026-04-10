@@ -39,11 +39,20 @@
         @error('due_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
     <div class="mb-3">
-        <label class="form-label">Ответственный</label>
+        <label class="form-label">Клиент</label>
         <select name="client_id" class="form-select">
-            <option value="">— не назначен</option>
+            <option value="">— не выбран</option>
             @foreach($clients as $c)
                 <option value="{{ $c->id }}" @selected(old('client_id') == $c->id)>{{ $c->first_name }} {{ $c->last_name }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Ответственный</label>
+        <select name="responsible_user_id" class="form-select">
+            <option value="">— не назначен</option>
+            @foreach($users as $u)
+                <option value="{{ $u->id }}" @selected(old('responsible_user_id') == $u->id)>{{ $u->name }}</option>
             @endforeach
         </select>
     </div>

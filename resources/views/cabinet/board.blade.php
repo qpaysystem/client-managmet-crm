@@ -13,10 +13,10 @@
             <a href="{{ route('cabinet.tasks.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i> Создать задачу</a>
             <form method="get" action="{{ route('cabinet.board') }}" class="d-flex align-items-center gap-2 flex-wrap">
                 <label for="filter-responsible" class="form-label mb-0 fw-medium">Фильтр по ответственному:</label>
-                <select id="filter-responsible" name="responsible_id" class="form-select form-select-sm" style="min-width: 200px;" onchange="this.form.submit()">
+                <select id="filter-responsible" name="responsible_user_id" class="form-select form-select-sm" style="min-width: 200px;" onchange="this.form.submit()">
                     <option value="">— Все —</option>
-                    @foreach($clients ?? [] as $c)
-                        <option value="{{ $c->id }}" @selected(($filterResponsibleId ?? '') == $c->id || ($filterResponsibleId ?? '') == (string)$c->id)>{{ $c->first_name }} {{ $c->last_name }}</option>
+                    @foreach($users ?? [] as $u)
+                        <option value="{{ $u->id }}" @selected(($filterResponsibleUserId ?? '') == $u->id || ($filterResponsibleUserId ?? '') == (string)$u->id)>{{ $u->name }}</option>
                     @endforeach
                 </select>
                 <noscript><button type="submit" class="btn btn-sm btn-outline-secondary">Применить</button></noscript>
@@ -40,8 +40,8 @@
                 <div class="card mb-2 bg-white border kanban-task" draggable="true" data-task-id="{{ $task->id }}">
                     <div class="card-body py-2 px-3">
                         <div class="fw-semibold">{{ Str::limit($task->title, 50) }}</div>
-                        @if($task->client)
-                            <div class="small text-primary mt-1"><i class="bi bi-person me-1"></i>{{ $task->client->full_name }}</div>
+                        @if($task->responsibleUser)
+                            <div class="small text-primary mt-1"><i class="bi bi-person-badge me-1"></i>{{ $task->responsibleUser->name }}</div>
                         @endif
                         @if($task->due_date)
                             <div class="small text-muted mt-1"><i class="bi bi-calendar-event me-1"></i>Окончание: {{ $task->due_date->format('d.m.Y') }}</div>

@@ -19,6 +19,7 @@ class Task extends Model
         'sort_order',
         'show_on_board',
         'client_id',
+        'responsible_user_id',
         'project_id',
         'budget',
         'due_date',
@@ -27,6 +28,11 @@ class Task extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function responsibleUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsible_user_id');
     }
 
     public function project(): BelongsTo

@@ -1007,7 +1007,7 @@
                             <tr>
                                 <td>{{ Str::limit($t->title, 60) }}</td>
                                 <td><span class="badge bg-secondary">{{ $t->status_label }}</span></td>
-                                <td>{{ $t->client ? $t->client->full_name : '—' }}</td>
+                                <td>{{ $t->responsibleUser ? $t->responsibleUser->name : '—' }}</td>
                                 <td>{{ $t->due_date ? $t->due_date->format('d.m.Y') : '—' }}</td>
                                 <td class="text-end">{{ $t->budget !== null ? number_format($t->budget, 2) . ' ' . \App\Models\Setting::get('currency', 'RUB') : '—' }}</td>
                             </tr>

@@ -16,6 +16,7 @@ use App\Models\ProjectDocument;
 use App\Models\ProjectDocumentField;
 use App\Models\PushSubscription;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -78,12 +79,16 @@ class CabinetController extends Controller
     {
         $this->getClient($request);
         $statuses = Task::statusesForBoard();
-        $responsibleId = $request->get('responsible_id');
-        $clients = \App\Models\Client::orderBy('first_name')->orderBy('last_name')->get(['id', 'first_name', 'last_name']);
+        $responsibleUserId = $request->get('responsible_user_id');
+        if ($responsibleUserId === null || $responsibleUserId === '') {
+            // Backward compatibility with old param name
+            $responsibleUserId = $request->get('responsible_id');
+        }
+        $users = User::orderBy('name')->get(['id', 'name']);
 
-        $query = Task::where('show_on_board', true)->with('client');
-        if ($responsibleId !== null && $responsibleId !== '') {
-            $query->where('client_id', $responsibleId);
+        $query = Task::where('show_on_board', true)->with(['client', 'responsibleUser']);
+        if ($responsibleUserId !== null && $responsibleUserId !== '') {
+            $query->where('responsible_user_id', $responsibleUserId);
         }
 
         $tasksByStatus = [];
@@ -98,8 +103,8 @@ class CabinetController extends Controller
         return view('cabinet.board', [
             'statuses' => $statuses,
             'tasksByStatus' => $tasksByStatus,
-            'clients' => $clients,
-            'filterResponsibleId' => $responsibleId,
+            'users' => $users,
+            'filterResponsibleUserId' => $responsibleUserId,
         ]);
     }
 
@@ -107,8 +112,9 @@ class CabinetController extends Controller
     {
         $this->getClient($request);
         $clients = Client::orderBy('first_name')->orderBy('last_name')->get(['id', 'first_name', 'last_name']);
+        $users = User::orderBy('name')->get(['id', 'name']);
         $projects = Project::orderBy('name')->get(['id', 'name']);
-        return view('cabinet.tasks.create', compact('clients', 'projects'));
+        return view('cabinet.tasks.create', compact('clients', 'users', 'projects'));
     }
 
     public function storeTask(Request $request): RedirectResponse
@@ -120,12 +126,14 @@ class CabinetController extends Controller
             'status' => 'required|in:in_development,processing,execution,completed',
             'show_on_board' => 'boolean',
             'client_id' => 'nullable|exists:clients,id',
+            'responsible_user_id' => 'nullable|exists:users,id',
             'project_id' => 'nullable|exists:projects,id',
             'budget' => 'nullable|numeric|min:0',
             'due_date' => 'nullable|date',
         ]);
         $validated['show_on_board'] = $request->boolean('show_on_board');
         $validated['client_id'] = $validated['client_id'] ?? null;
+        $validated['responsible_user_id'] = $validated['responsible_user_id'] ?? null;
         $validated['project_id'] = $validated['project_id'] ?? null;
         $validated['budget'] = isset($validated['budget']) && $validated['budget'] !== '' ? (float) $validated['budget'] : null;
         $validated['due_date'] = !empty($validated['due_date']) ? $validated['due_date'] : null;
@@ -162,7 +170,7 @@ class CabinetController extends Controller
             'apartments',
             'documentFields',
             'documents',
-            'tasks' => function ($q) { return $q->with('client'); },
+            'tasks' => function ($q) { return $q->with(['client', 'responsibleUser']); },
             'balanceTransactions' => function ($q) { return $q->with(['client', 'projectExpenseItem'])->latest(); },
             'constructionStages' => function ($q) { return $q->with(['client', 'works']); },
         ]);

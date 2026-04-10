@@ -29,8 +29,8 @@
                 <div class="card mb-2 shadow-sm">
                     <div class="card-body py-2 px-3">
                         <div class="fw-semibold small">{{ Str::limit($task->title, 40) }}</div>
-                        @if($task->client)
-                            <div class="small text-muted mt-1"><i class="bi bi-person"></i> {{ $task->client->full_name }}</div>
+                        @if($task->responsibleUser)
+                            <div class="small text-muted mt-1"><i class="bi bi-person-badge"></i> {{ $task->responsibleUser->name }}</div>
                         @endif
                         @if($task->due_date)
                             <div class="small text-muted mt-1"><i class="bi bi-calendar-event"></i> Окончание: {{ $task->due_date->format('d.m.Y') }}</div>

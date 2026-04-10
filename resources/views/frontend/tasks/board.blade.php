@@ -18,8 +18,8 @@
                 <div class="card mb-2 bg-white border kanban-task" draggable="true" data-task-id="{{ $task->id }}">
                     <div class="card-body py-2 px-3">
                         <div class="fw-semibold">{{ Str::limit($task->title, 50) }}</div>
-                        @if($task->client)
-                            <div class="small text-muted mt-1"><i class="bi bi-person"></i> {{ $task->client->full_name }}</div>
+                        @if($task->responsibleUser)
+                            <div class="small text-muted mt-1"><i class="bi bi-person-badge"></i> {{ $task->responsibleUser->name }}</div>
                         @endif
                         @if($task->description)
                             <div class="text-muted small mt-1">{{ Str::limit($task->description, 80) }}</div>

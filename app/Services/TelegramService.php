@@ -52,10 +52,10 @@ class TelegramService
         if (!$token || !$chatId) {
             return false;
         }
-        $task->load(['client', 'project']);
+        $task->load(['responsibleUser', 'client', 'project']);
         $title = self::escapeMarkdown($task->title);
         $projectName = $task->project ? self::escapeMarkdown($task->project->name) : '—';
-        $responsible = $task->client ? self::escapeMarkdown($task->client->full_name) : '—';
+        $responsible = $task->responsibleUser ? self::escapeMarkdown($task->responsibleUser->name) : '—';
         $status = $task->status_label;
         $due = $task->due_date ? $task->due_date->format('d.m.Y') : '—';
         $text = "✅ *Задача создана*\n";
@@ -78,10 +78,10 @@ class TelegramService
         if (!$token || !$chatId) {
             return false;
         }
-        $task->load(['client', 'project']);
+        $task->load(['responsibleUser', 'client', 'project']);
         $title = self::escapeMarkdown($task->title);
         $projectName = $task->project ? self::escapeMarkdown($task->project->name) : '—';
-        $responsible = $task->client ? self::escapeMarkdown($task->client->full_name) : '—';
+        $responsible = $task->responsibleUser ? self::escapeMarkdown($task->responsibleUser->name) : '—';
         $status = $task->status_label;
         $due = $task->due_date ? $task->due_date->format('d.m.Y') : '—';
         $text = "✏️ *Задача изменена*\n";

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\TelegramService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,11 @@ class TaskController extends Controller
 {
     public function index(Request $request): View
     {
-        $query = Task::query()->with(['client', 'project'])->orderBy('status')->orderBy('sort_order')->orderBy('id');
+        $query = Task::query()
+            ->with(['client', 'project', 'responsibleUser'])
+            ->orderBy('status')
+            ->orderBy('sort_order')
+            ->orderBy('id');
 
         if ($request->filled('status')) {
             $query->where('status', $request->get('status'));
@@ -31,7 +36,7 @@ class TaskController extends Controller
         $tasksByStatus = [];
         foreach ($statuses as $status) {
             $tasksByStatus[$status] = Task::where('status', $status)
-                ->with('client')
+                ->with(['client', 'responsibleUser'])
                 ->where('show_on_board', true)
                 ->orderBy('sort_order')
                 ->orderBy('id')
@@ -46,8 +51,9 @@ class TaskController extends Controller
     public function create(): View
     {
         $clients = Client::orderBy('first_name')->orderBy('last_name')->get(['id', 'first_name', 'last_name']);
+        $users = User::orderBy('name')->get(['id', 'name']);
         $projects = Project::orderBy('name')->get(['id', 'name']);
-        return view('admin.tasks.create', compact('clients', 'projects'));
+        return view('admin.tasks.create', compact('clients', 'users', 'projects'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -58,12 +64,14 @@ class TaskController extends Controller
             'status' => 'required|in:in_development,processing,execution,completed',
             'show_on_board' => 'boolean',
             'client_id' => 'nullable|exists:clients,id',
+            'responsible_user_id' => 'nullable|exists:users,id',
             'project_id' => 'nullable|exists:projects,id',
             'budget' => 'nullable|numeric|min:0',
             'due_date' => 'nullable|date',
         ]);
         $validated['show_on_board'] = $request->boolean('show_on_board');
         $validated['client_id'] = $validated['client_id'] ?? null;
+        $validated['responsible_user_id'] = $validated['responsible_user_id'] ?? null;
         $validated['project_id'] = $validated['project_id'] ?? null;
         $validated['budget'] = isset($validated['budget']) && $validated['budget'] !== '' ? (float) $validated['budget'] : null;
         $validated['due_date'] = !empty($validated['due_date']) ? $validated['due_date'] : null;
@@ -77,8 +85,9 @@ class TaskController extends Controller
     public function edit(Task $task): View
     {
         $clients = Client::orderBy('first_name')->orderBy('last_name')->get(['id', 'first_name', 'last_name']);
+        $users = User::orderBy('name')->get(['id', 'name']);
         $projects = Project::orderBy('name')->get(['id', 'name']);
-        return view('admin.tasks.edit', compact('task', 'clients', 'projects'));
+        return view('admin.tasks.edit', compact('task', 'clients', 'users', 'projects'));
     }
 
     public function update(Request $request, Task $task): RedirectResponse
@@ -89,12 +98,14 @@ class TaskController extends Controller
             'status' => 'required|in:in_development,processing,execution,completed',
             'show_on_board' => 'boolean',
             'client_id' => 'nullable|exists:clients,id',
+            'responsible_user_id' => 'nullable|exists:users,id',
             'project_id' => 'nullable|exists:projects,id',
             'budget' => 'nullable|numeric|min:0',
             'due_date' => 'nullable|date',
         ]);
         $validated['show_on_board'] = $request->boolean('show_on_board');
         $validated['client_id'] = $validated['client_id'] ?? null;
+        $validated['responsible_user_id'] = $validated['responsible_user_id'] ?? null;
         $validated['project_id'] = $validated['project_id'] ?? null;
         $validated['budget'] = isset($validated['budget']) && $validated['budget'] !== '' ? (float) $validated['budget'] : null;
         $validated['due_date'] = !empty($validated['due_date']) ? $validated['due_date'] : null;

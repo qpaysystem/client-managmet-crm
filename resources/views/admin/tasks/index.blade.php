@@ -31,7 +31,7 @@
                     <td>{{ $t->budget !== null ? number_format($t->budget, 2) . ' ' . \App\Models\Setting::get('currency', 'RUB') : '—' }}</td>
                     <td>{{ $t->due_date ? $t->due_date->format('d.m.Y') : '—' }}</td>
                     <td><span class="badge bg-secondary">{{ $t->status_label }}</span></td>
-                    <td>{{ $t->client ? $t->client->full_name : '—' }}</td>
+                    <td>{{ $t->responsibleUser ? $t->responsibleUser->name : '—' }}</td>
                     <td>{{ $t->show_on_board ? 'Да' : 'Нет' }}</td>
                     <td>
                         <a href="{{ route('admin.tasks.edit', $t) }}" class="btn btn-sm btn-outline-primary">Изменить</a>

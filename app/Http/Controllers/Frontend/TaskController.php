@@ -16,7 +16,7 @@ class TaskController extends Controller
         $tasksByStatus = [];
         foreach ($statuses as $status) {
             $tasksByStatus[$status] = Task::where('status', $status)
-                ->with('client')
+                ->with(['client', 'responsibleUser'])
                 ->where('show_on_board', true)
                 ->orderBy('sort_order')
                 ->orderBy('id')

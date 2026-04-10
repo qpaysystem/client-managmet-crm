@@ -36,11 +36,20 @@
         <small class="text-muted">Отображается в календаре клиента на iPhone</small>
     </div>
     <div class="mb-3">
-        <label class="form-label">Ответственный (клиент)</label>
+        <label class="form-label">Клиент (для календаря/связи)</label>
         <select name="client_id" class="form-select">
-            <option value="">— не назначен</option>
+            <option value="">— не выбран</option>
             @foreach($clients as $c)
                 <option value="{{ $c->id }}" @selected(old('client_id', $task->client_id) == $c->id)>{{ $c->full_name }}</option>
+            @endforeach
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Ответственный (пользователь)</label>
+        <select name="responsible_user_id" class="form-select">
+            <option value="">— не назначен</option>
+            @foreach($users as $u)
+                <option value="{{ $u->id }}" @selected(old('responsible_user_id', $task->responsible_user_id) == $u->id)>{{ $u->name }}</option>
             @endforeach
         </select>
     </div>
