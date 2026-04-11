@@ -44,18 +44,63 @@ class OpenAiChatService
         }
 
         $refusal = TelegramGroupAssistantService::OFF_TOPIC_REPLY;
-        $system = "Ты — агент CRM компании. Ниже JSON в блоке CRM_DATA_JSON — актуальный снимок данных из базы "
-            . "(клиенты, проекты, квартиры, транзакции, задачи и т.д.).\n\n"
-            . "Компетенция агента: отвечать только на вопросы, связанные с этими данными и работой CRM — "
-            . 'квартиры и объекты, сделки, транзакции и балансы, задачи, клиенты и проекты в деловом контексте, '
-            . 'краткая аналитика и сводки по этим данным. Отвечай по-русски кратко, только по фактам из JSON. '
-            . "Не выдумывай цифры.\n\n"
-            . "Если сообщение пользователя НЕ относится к работе CRM и этим данным "
-            . '(обычный бытовой чат, приветствие без смысла, погода, политика, шутки, личные темы, '
-            . 'вопросы вне базы, или ответ невозможен из снимка) — ответь РОВНО одной строкой, без кавычек и без другого текста:'
-            . "\n{$refusal}";
+        $system = "Ты — агент CRM. Ниже JSON CRM_DATA_JSON — снимок базы (клиенты, проекты, квартиры, транзакции, задачи).\n\n"
+            . "Это В компетенции — отвечай по JSON, не отказывай: «сколько свободных/свободно квартир», квартиры по статусам и проектам, "
+            . "транзакции, задачи, клиенты. Для вопроса про свободные квартиры используй apartments.free_total и apartments.by_status_counts.\n\n"
+            . "Отвечай по-русски кратко, только факты из JSON. Не выдумывай цифры.\n\n"
+            . "Фразу «{$refusal}» используй ТОЛЬКО для явного оффтопа (погода, политика, шутки, личное без связи с CRM). "
+            . 'Не отказывай на вопросы про квартиры, деньги, задачи, клиентов, если в JSON есть поля.';
 
-        return $this->completeWithCrmSnapshot($userMessage, $system, 0.1, 'OpenAI Telegram group agent');
+        $result = $this->completeWithCrmSnapshot($userMessage, $system, 0.25, 'OpenAI Telegram group agent');
+
+        return $this->overrideTelegramRefusalWhenDataExists($userMessage, $result);
+    }
+
+    /**
+     * @param  array{content:string,usage?:array}  $result
+     * @return array{content:string,usage?:array}
+     */
+    private function overrideTelegramRefusalWhenDataExists(string $userMessage, array $result): array
+    {
+        $content = trim($result['content'] ?? '');
+        $refusal = TelegramGroupAssistantService::OFF_TOPIC_REPLY;
+        $looksRefused = ($content === $refusal)
+            || (mb_stripos($content, 'не входит в компетенции') !== false && mb_strlen($content) < 80);
+        $modelEmptyReply = (bool) preg_match('/^ИИ вернул пустой ответ/u', $content);
+
+        if (! $looksRefused && ! $modelEmptyReply) {
+            return $result;
+        }
+
+        $snapshot = Cache::get('crm_ai_snapshot_v1');
+        if (! is_array($snapshot)) {
+            return $result;
+        }
+
+        if ($this->isFreeApartmentsCountQuestion($userMessage)) {
+            $n = $snapshot['apartments']['free_total'] ?? null;
+            if ($n !== null) {
+                return [
+                    'content' => 'По данным CRM сейчас свободных квартир: ' . (int) $n . '.',
+                    'usage' => $result['usage'] ?? null,
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    private function isFreeApartmentsCountQuestion(string $q): bool
+    {
+        $q = mb_strtolower($q);
+        if (! preg_match('/квартир/u', $q)) {
+            return false;
+        }
+        if (! preg_match('/свобод|продаж|доступн|в\s+наличии|осталось|свободн/u', $q)) {
+            return false;
+        }
+
+        return (bool) preg_match('/сколько|количеств|число|есть\s+ли|много\s+ли|как\s+много/u', $q);
     }
 
     /**
