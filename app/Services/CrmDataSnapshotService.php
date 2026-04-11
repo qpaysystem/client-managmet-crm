@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Apartment;
 use App\Models\BalanceTransaction;
+use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Support\Str;
@@ -80,6 +81,13 @@ class CrmDataSnapshotService
 
         return [
             'generated_at' => now()->toIso8601String(),
+            'clients' => [
+                'total' => Client::query()->count(),
+                'active' => Client::query()->where('status', 'active')->count(),
+            ],
+            'projects' => [
+                'total' => Project::query()->count(),
+            ],
             'apartments' => [
                 'total' => Apartment::query()->count(),
                 'by_status_counts' => $apartmentsHuman,

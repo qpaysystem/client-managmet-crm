@@ -9,6 +9,7 @@ use App\Services\TelegramGroupAssistantService;
 use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TelegramWebhookController extends Controller
@@ -87,13 +88,48 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
+        $token = Setting::get('telegram_bot_token');
+        $provider = (string) Setting::get('ai_provider', 'openai');
+        if (! in_array($provider, ['openai', 'deepseek'], true)) {
+            $provider = 'openai';
+        }
+        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
+
+        // Режим по умолчанию: каждое текстовое сообщение → ИИ + снимок БД; оффтоп → фиксированный отказ.
+        if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '' && $apiKey !== '') {
+            $fromId = isset($from['id']) ? (int) $from['id'] : 0;
+            $coolKey = 'telegram_ai_cd_' . $incomingChatId . '_' . $fromId;
+            if (! Cache::add($coolKey, 1, 2)) {
+                return response()->json(['ok' => true]);
+            }
+
+            $chatId = $incomingChatId;
+            $dispatchText = $text;
+            dispatch(function () use ($dispatchText, $token, $chatId): void {
+                try {
+                    $ai = app(OpenAiChatService::class);
+                    $answer = $ai->answerTelegramGroupAgent($dispatchText);
+                    $out = TelegramWebhookController::truncateTelegramMessage($answer['content']);
+                    TelegramService::sendPlainMessage($token, $chatId, $out);
+                } catch (\Throwable $e) {
+                    Log::error('telegram_group_agent_after_response', ['message' => $e->getMessage()]);
+                    TelegramService::sendPlainMessage(
+                        $token,
+                        $chatId,
+                        'Не удалось получить ответ ИИ. Попробуйте позже.'
+                    );
+                }
+            })->afterResponse();
+
+            return response()->json(['ok' => true]);
+        }
+
+        // Устаревший режим: только /вопрос, /ask и «естественные» вопросы по CRM.
         if (Setting::get('telegram_group_ai_crm', '1') === '1') {
             $crmQuestion = TelegramGroupAssistantService::extractCrmAiQuestion($text);
             if ($crmQuestion !== null && $crmQuestion !== '') {
-                $token = Setting::get('telegram_bot_token');
                 if ($token) {
                     $chatId = $incomingChatId;
-                    // Telegram ждёт быстрый ответ на webhook; ИИ и sendMessage — после ответа клиенту.
                     dispatch(function () use ($crmQuestion, $token, $chatId): void {
                         try {
                             $ai = app(OpenAiChatService::class);
@@ -125,7 +161,6 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $token = Setting::get('telegram_bot_token');
         if (!$token) {
             return response()->json(['ok' => true]);
         }

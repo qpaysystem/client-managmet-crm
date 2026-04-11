@@ -66,12 +66,16 @@
                 <label class="form-check-label" for="telegram_webhook_secret_clear">Сбросить секрет webhook</label>
             </div>
             <div class="form-check mb-2">
+                <input type="checkbox" name="telegram_group_ai_all" value="1" class="form-check-input" id="telegram_group_ai_all" {{ ($settings['telegram_group_ai_all'] ?? '1') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="telegram_group_ai_all"><strong>Все сообщения группы через ИИ-агента</strong> — снимок данных CRM в каждом запросе; вопрос не по теме → ответ: «{{ \App\Services\TelegramGroupAssistantService::OFF_TOPIC_REPLY }}» (нужны токен бота и API key ИИ)</label>
+            </div>
+            <div class="form-check mb-2">
                 <input type="checkbox" name="telegram_group_assistant_reply" value="1" class="form-check-input" id="telegram_group_assistant_reply" {{ ($settings['telegram_group_assistant_reply'] ?? '1') == '1' ? 'checked' : '' }}>
-                <label class="form-check-label" for="telegram_group_assistant_reply">Отвечать в группе на запрос актуальной информации («помоги получить текущую информацию» и похожее)</label>
+                <label class="form-check-label" for="telegram_group_assistant_reply">Отвечать на фразу «помоги получить текущую информацию» (короткий ответ; не используется, если включено «все сообщения через ИИ»)</label>
             </div>
             <div class="form-check">
                 <input type="checkbox" name="telegram_group_ai_crm" value="1" class="form-check-input" id="telegram_group_ai_crm" {{ ($settings['telegram_group_ai_crm'] ?? '1') == '1' ? 'checked' : '' }}>
-                <label class="form-check-label" for="telegram_group_ai_crm">ИИ по данным CRM в группе: команды <code>/вопрос …</code> и <code>/ask …</code>, а также короткие вопросы про квартиры, транзакции, задачи (нужен API key ИИ)</label>
+                <label class="form-check-label" for="telegram_group_ai_crm">Режим только <code>/вопрос</code> / <code>/ask</code> и узкие вопросы по CRM (если «все сообщения через ИИ» выключено)</label>
             </div>
             <p class="text-muted small mt-2 mb-0">Бот должен быть в группе; в BotFather для бота отключите режим приватности (<code>/setprivacy</code> → Disable), иначе бот не увидит обычные сообщения. Chat ID выше должен совпадать с этой группой.</p>
         </div>

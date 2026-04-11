@@ -27,6 +27,7 @@ class SettingController extends Controller
             'telegram_notify_stages' => Setting::get('telegram_notify_stages', '0'),
             'telegram_webhook_secret' => Setting::get('telegram_webhook_secret', ''),
             'telegram_group_assistant_reply' => Setting::get('telegram_group_assistant_reply', '1'),
+            'telegram_group_ai_all' => Setting::get('telegram_group_ai_all', '1'),
             'telegram_group_ai_crm' => Setting::get('telegram_group_ai_crm', '1'),
             'ai_include_crm_snapshot' => Setting::get('ai_include_crm_snapshot', '0'),
             // New universal AI settings (preferred)
@@ -60,6 +61,7 @@ class SettingController extends Controller
             'telegram_webhook_secret' => 'nullable|string|max:255',
             'telegram_webhook_secret_clear' => 'nullable|in:0,1',
             'telegram_group_assistant_reply' => 'in:0,1',
+            'telegram_group_ai_all' => 'in:0,1',
             'telegram_group_ai_crm' => 'in:0,1',
             'ai_include_crm_snapshot' => 'in:0,1',
             // New AI settings
@@ -89,6 +91,7 @@ class SettingController extends Controller
             Setting::set('telegram_webhook_secret', trim((string) $request->get('telegram_webhook_secret')));
         }
         Setting::set('telegram_group_assistant_reply', $request->get('telegram_group_assistant_reply', '1'));
+        Setting::set('telegram_group_ai_all', $request->get('telegram_group_ai_all', '1'));
         Setting::set('telegram_group_ai_crm', $request->get('telegram_group_ai_crm', '1'));
         Setting::set('ai_include_crm_snapshot', $request->get('ai_include_crm_snapshot', '0'));
 

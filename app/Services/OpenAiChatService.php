@@ -23,6 +23,49 @@ class OpenAiChatService
             return ['content' => 'Задайте вопрос текстом (например: сколько свободных квартир).'];
         }
 
+        $system = 'Ты — аналитик CRM. Ниже JSON — актуальные агрегированные данные из базы (только чтение). '
+            . 'Ответь на вопрос пользователя по-русски, кратко и по фактам из данных. '
+            . 'Если в данных нет нужного — так и скажи. Не выдумывай цифры.';
+
+        return $this->completeWithCrmSnapshot($userQuestion, $system, 0.2, 'OpenAI CRM question');
+    }
+
+    /**
+     * Агент группы Telegram: снимок CRM + отказ по оффтопу (фиксированная фраза).
+     *
+     * @return array{content:string,usage?:array}
+     */
+    public function answerTelegramGroupAgent(string $userMessage): array
+    {
+        $userMessage = trim($userMessage);
+        if ($userMessage === '') {
+            return ['content' => TelegramGroupAssistantService::OFF_TOPIC_REPLY];
+        }
+
+        $refusal = TelegramGroupAssistantService::OFF_TOPIC_REPLY;
+        $system = "Ты — агент CRM компании. Ниже JSON в блоке CRM_DATA_JSON — актуальный снимок данных из базы "
+            . "(клиенты, проекты, квартиры, транзакции, задачи и т.д.).\n\n"
+            . "Компетенция агента: отвечать только на вопросы, связанные с этими данными и работой CRM — "
+            . 'квартиры и объекты, сделки, транзакции и балансы, задачи, клиенты и проекты в деловом контексте, '
+            . 'краткая аналитика и сводки по этим данным. Отвечай по-русски кратко, только по фактам из JSON. '
+            . "Не выдумывай цифры.\n\n"
+            . "Если сообщение пользователя НЕ относится к работе CRM и этим данным "
+            . '(обычный бытовой чат, приветствие без смысла, погода, политика, шутки, личные темы, '
+            . 'вопросы вне базы, или ответ невозможен из снимка) — ответь РОВНО одной строкой, без кавычек и без другого текста:'
+            . "\n{$refusal}";
+
+        return $this->completeWithCrmSnapshot($userMessage, $system, 0.1, 'OpenAI Telegram group agent');
+    }
+
+    /**
+     * @return array{content:string,usage?:array}
+     */
+    private function completeWithCrmSnapshot(string $userQuestion, string $systemPrompt, float $temperature, string $logLabel): array
+    {
+        if (mb_strlen($userQuestion) > 4000) {
+            $userQuestion = mb_substr($userQuestion, 0, 4000);
+        }
+
         $provider = (string) Setting::get('ai_provider', 'openai');
         if (!in_array($provider, ['openai', 'deepseek'], true)) {
             $provider = 'openai';
@@ -41,6 +84,7 @@ class OpenAiChatService
             $snapshot = CrmDataSnapshotService::build();
         } catch (\Throwable $e) {
             Log::error('CrmDataSnapshotService failed', ['message' => $e->getMessage()]);
+
             return ['content' => 'Не удалось собрать данные из CRM для ответа.'];
         }
 
@@ -49,11 +93,8 @@ class OpenAiChatService
             return ['content' => 'Ошибка подготовки данных.'];
         }
 
-        $system = "Ты — аналитик CRM. Ниже JSON — актуальные агрегированные данные из базы (только чтение). "
-            . "Ответь на вопрос пользователя по-русски, кратко и по фактам из данных. "
-            . "Если в данных нет нужного — так и скажи. Не выдумывай цифры.";
         $messages = [
-            ['role' => 'system', 'content' => $system],
+            ['role' => 'system', 'content' => $systemPrompt],
             ['role' => 'system', 'content' => "CRM_DATA_JSON:\n{$snapshotJson}"],
             ['role' => 'user', 'content' => $userQuestion],
         ];
@@ -65,12 +106,12 @@ class OpenAiChatService
                 ->post("{$baseUrl}/chat/completions", [
                     'model' => $model,
                     'messages' => $messages,
-                    'temperature' => 0.2,
+                    'temperature' => $temperature,
                 ]);
 
             if (!$response->successful()) {
                 $errorText = $this->extractErrorText($response->body());
-                Log::warning('OpenAI CRM question failed', [
+                Log::warning($logLabel . ' failed', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
@@ -88,9 +129,9 @@ class OpenAiChatService
                 return ['content' => 'ИИ вернул пустой ответ.', 'usage' => is_array($usage) ? $usage : null];
             }
 
-            return ['content' => $content, 'usage' => is_array($usage) ? $usage : null];
+            return ['content' => trim($content), 'usage' => is_array($usage) ? $usage : null];
         } catch (\Throwable $e) {
-            Log::error('OpenAI CRM question exception', ['message' => $e->getMessage()]);
+            Log::error($logLabel . ' exception', ['message' => $e->getMessage()]);
 
             return ['content' => 'Ошибка соединения с ИИ.'];
         }
