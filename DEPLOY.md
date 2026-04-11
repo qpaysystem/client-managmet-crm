@@ -54,6 +54,14 @@ rm -f composer-setup.php
 
 Подробнее: [DEPLOYMENT_TIMEWEB.md](DEPLOYMENT_TIMEWEB.md) — раздел «Проблемы при деплое», пункт 3.
 
+**Ошибка `-bash: /opt/php56/bin/php: No such file or directory` при вводе `php artisan …`**  
+В сессии SSH команда `php` указывает на несуществующий старый PHP. Не используйте короткое `php`, вызывайте Artisan с рабочим бинарником, например:
+```bash
+/usr/bin/php artisan migrate --force
+/usr/bin/php -v
+```
+Чтобы исправить по умолчанию в текущей оболочке: `alias php=/usr/bin/php` (можно добавить в `~/.bashrc`).
+
 Если PHP у вас в другом месте (узнать: `which php` или `/usr/local/bin/php -v`), подставьте его вместо `/usr/bin/php`. Для deploy.sh:
 
 ```bash
@@ -69,11 +77,11 @@ export COMPOSER="/usr/bin/php composer.phar"
    composer install --optimize-autoloader --no-dev
    ```
 2. В Cursor: **Cmd+Shift+P** → **SFTP: Sync Local -> Remote** (загрузить проект на сервер).
-3. **На сервере** по SSH в корне проекта:
+3. **На сервере** по SSH в корне проекта (если `php` не работает — см. блок про `/opt/php56` выше, используйте `/usr/bin/php`):
    ```bash
-   php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
-   php artisan migrate --force
-   php artisan config:cache && php artisan route:cache && php artisan view:cache
+   /usr/bin/php artisan config:clear && /usr/bin/php artisan route:clear && /usr/bin/php artisan view:clear && /usr/bin/php artisan cache:clear
+   /usr/bin/php artisan migrate --force
+   /usr/bin/php artisan config:cache && /usr/bin/php artisan route:cache && /usr/bin/php artisan view:cache
    ```
 
 ---
