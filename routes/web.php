@@ -190,6 +190,7 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
     // AI assistant
     Route::get('ai', [AiAssistantController::class, 'index'])->name('ai.index');
     Route::get('ai/context', [AiAssistantController::class, 'context'])->name('ai.context');
+    Route::get('ai/telegram-messages', [AiAssistantController::class, 'telegramMessages'])->name('ai.telegram-messages');
 
     // Prompts
     Route::get('ai/prompts', [AiAssistantController::class, 'promptsIndex'])->name('ai.prompts.index');

@@ -10,6 +10,7 @@ use App\Models\Client;
 use App\Models\Project;
 use App\Models\Setting;
 use App\Models\Task;
+use App\Models\TelegramGroupMessage;
 use App\Services\CrmDataSnapshotService;
 use App\Services\OpenAiChatService;
 use App\Services\TaskSituationReportService;
@@ -37,7 +38,65 @@ class AiAssistantController extends Controller
             ->limit(30)
             ->get();
 
-        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations'));
+        $telegramChatId = trim(str_replace(["\xc2\xa0", ' '], '', (string) Setting::get('telegram_chat_id', '')));
+
+        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId'));
+    }
+
+    /**
+     * Сообщения группы Telegram, сохранённые webhook-ом (дубль переписки для админки).
+     */
+    public function telegramMessages(Request $request): JsonResponse
+    {
+        $request->validate([
+            'limit' => 'nullable|integer|min:1|max:500',
+        ]);
+        $limit = (int) $request->input('limit', 400);
+
+        $chatId = trim(str_replace(["\xc2\xa0", ' '], '', (string) Setting::get('telegram_chat_id', '')));
+        if ($chatId === '') {
+            return response()->json([
+                'ok' => true,
+                'chat_id' => null,
+                'messages' => [],
+                'total_in_db' => 0,
+                'loaded' => 0,
+                'hint' => 'В настройках не задан Chat ID Telegram.',
+            ]);
+        }
+
+        $total = TelegramGroupMessage::query()->where('chat_id', $chatId)->count();
+
+        $rows = TelegramGroupMessage::query()
+            ->where('chat_id', $chatId)
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->reverse()
+            ->values();
+
+        $messages = $rows->map(function (TelegramGroupMessage $m) {
+            $author = trim(($m->from_first_name ?: '') . ($m->from_username ? ' @' . $m->from_username : ''));
+            if ($author === '') {
+                $author = 'Участник';
+            }
+
+            return [
+                'id' => $m->id,
+                'telegram_message_id' => $m->message_id,
+                'author' => $author,
+                'text' => $m->text,
+                'at' => $m->message_date?->format('d.m.Y H:i') ?? '',
+            ];
+        });
+
+        return response()->json([
+            'ok' => true,
+            'chat_id' => $chatId,
+            'messages' => $messages,
+            'total_in_db' => $total,
+            'loaded' => $messages->count(),
+        ]);
     }
 
     public function promptsIndex(): JsonResponse

@@ -12,6 +12,9 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-chat" data-bs-toggle="tab" data-bs-target="#pane-chat" type="button" role="tab">Чат</button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-telegram" data-bs-toggle="tab" data-bs-target="#pane-telegram" type="button" role="tab"><i class="bi bi-telegram"></i> Сообщения Telegram</button>
+    </li>
 </ul>
 
 <div class="tab-content">
@@ -136,6 +139,30 @@
                         <div class="alert alert-danger mt-2 d-none" id="chat-error"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="pane-telegram" role="tabpanel">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <strong>Сообщения группы</strong>
+                    <span class="text-muted small ms-2">дубль переписки из БД (webhook)</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-tg-refresh" title="Обновить">
+                    <i class="bi bi-arrow-clockwise"></i> Обновить
+                </button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2" id="tg-meta-hint">
+                    @if($telegramChatId ?? '')
+                        Chat ID в настройках: <code>{{ $telegramChatId }}</code>
+                    @else
+                        Задайте Chat ID в настройках — сюда попадут сообщения той же группы, куда идут уведомления.
+                    @endif
+                </p>
+                <div id="tg-chat" class="border rounded p-3 bg-light" style="height: 480px; overflow: auto; font-size: 0.95rem;"></div>
             </div>
         </div>
     </div>
@@ -517,6 +544,60 @@
     // initialize context selects
     if (ctxClient && ctxProject && ctxTask) {
         reloadContext();
+    }
+
+    // ----- Telegram group messages (duplicate of group chat) -----
+    const tgChat = document.getElementById('tg-chat');
+    const tgMetaHint = document.getElementById('tg-meta-hint');
+    const btnTgRefresh = document.getElementById('btn-tg-refresh');
+    const tabTelegram = document.getElementById('tab-telegram');
+
+    async function loadTelegramMessages() {
+        if (!tgChat) return;
+        tgChat.innerHTML = '<div class="text-muted small">Загрузка…</div>';
+        try {
+            const url = new URL(`{{ route('admin.ai.telegram-messages') }}`, window.location.origin);
+            url.searchParams.set('limit', '400');
+            const r = await fetch(url.toString(), {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                tgChat.innerHTML = '<div class="text-danger">Не удалось загрузить сообщения.</div>';
+                return;
+            }
+            if (data.hint) {
+                if (tgMetaHint) tgMetaHint.textContent = data.hint;
+            } else if (tgMetaHint) {
+                tgMetaHint.innerHTML = 'Chat ID: <code>' + escapeHtml(String(data.chat_id || '')) + '</code> · в базе: ' + (data.total_in_db ?? 0) + ' · показано: ' + (data.loaded ?? 0);
+            }
+            tgChat.innerHTML = '';
+            const list = data.messages || [];
+            if (list.length === 0) {
+                tgChat.innerHTML = '<div class="text-muted">Сообщений пока нет. Убедитесь, что webhook включён и бот видит сообщения в группе (privacy off).</div>';
+                return;
+            }
+            list.forEach((m) => {
+                const row = document.createElement('div');
+                row.className = 'mb-3 pb-2 border-bottom';
+                const body = m.text
+                    ? '<div class="text-break">' + escapeHtml(m.text) + '</div>'
+                    : '<div class="text-muted"><em>(нет текста: стикер, медиа и т.п.)</em></div>';
+                row.innerHTML =
+                    '<div class="small text-secondary mb-1">' + escapeHtml(m.at || '') + ' · ' + escapeHtml(m.author || '') + '</div>' + body;
+                tgChat.appendChild(row);
+            });
+            tgChat.scrollTop = tgChat.scrollHeight;
+        } catch (e) {
+            tgChat.innerHTML = '<div class="text-danger">Ошибка сети</div>';
+        }
+    }
+
+    if (btnTgRefresh) {
+        btnTgRefresh.addEventListener('click', () => loadTelegramMessages());
+    }
+    if (tabTelegram) {
+        tabTelegram.addEventListener('shown.bs.tab', () => loadTelegramMessages());
     }
 })();
 </script>
