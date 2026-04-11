@@ -7,10 +7,44 @@ use App\Models\ConstructionStage;
 use App\Models\Setting;
 use App\Models\Task;
 use App\Models\TelegramGroupMessage;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class TelegramService
 {
+    /** Единый формат chat_id для БД и настроек (как в вебхуке). */
+    public static function normalizeChatIdForStorage(string $id): string
+    {
+        return trim(str_replace(["\xc2\xa0", ' '], '', $id));
+    }
+
+    /** ID пользователя бота по токену (кэш), чтобы отличать нашего бота от чужих в группе. */
+    public static function getBotUserId(?string $token = null): ?int
+    {
+        $token = $token ?? (string) Setting::get('telegram_bot_token', '');
+        if ($token === '') {
+            return null;
+        }
+        $cacheKey = 'telegram_bot_user_id_'.hash('sha256', $token);
+
+        return Cache::remember($cacheKey, 86400, function () use ($token) {
+            $url = "https://api.telegram.org/bot{$token}/getMe";
+            $ch = curl_init($url);
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+            ]);
+            $response = curl_exec($ch);
+            curl_close($ch);
+            $decoded = json_decode((string) $response, true);
+            if (! is_array($decoded) || empty($decoded['ok']) || ! isset($decoded['result']['id'])) {
+                return null;
+            }
+
+            return (int) $decoded['result']['id'];
+        });
+    }
+
     private static function escapeMarkdown(string $s): string
     {
         return str_replace(['_', '*', '[', ']', '`'], ['\_', '\*', '\[', '\]', '\`'], $s);
@@ -229,6 +263,7 @@ class TelegramService
         bool $recordInHistory = true,
         string $outgoingAuthorFirstName = 'ИИ-агент'
     ): bool {
+        $chatId = self::normalizeChatIdForStorage($chatId);
         $url = "https://api.telegram.org/bot{$token}/sendMessage";
         $data = [
             'chat_id' => $chatId,

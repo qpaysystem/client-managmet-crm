@@ -38,7 +38,7 @@ class AiAssistantController extends Controller
             ->limit(30)
             ->get();
 
-        $telegramChatId = trim(str_replace(["\xc2\xa0", ' '], '', (string) Setting::get('telegram_chat_id', '')));
+        $telegramChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
 
         return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId'));
     }
@@ -53,7 +53,7 @@ class AiAssistantController extends Controller
         ]);
         $limit = (int) $request->input('limit', 400);
 
-        $chatId = trim(str_replace(["\xc2\xa0", ' '], '', (string) Setting::get('telegram_chat_id', '')));
+        $chatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
         if ($chatId === '') {
             return response()->json([
                 'ok' => true,
@@ -69,6 +69,7 @@ class AiAssistantController extends Controller
 
         $rows = TelegramGroupMessage::query()
             ->where('chat_id', $chatId)
+            ->orderByRaw('COALESCE(message_date, created_at) DESC')
             ->orderByDesc('id')
             ->limit($limit)
             ->get()

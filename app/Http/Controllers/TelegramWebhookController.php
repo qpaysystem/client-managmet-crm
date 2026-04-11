@@ -41,12 +41,12 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $configuredChatId = self::normalizeTelegramChatId((string) Setting::get('telegram_chat_id', ''));
+        $configuredChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
         if ($configuredChatId === '') {
             return response()->json(['ok' => true]);
         }
 
-        $incomingChatId = self::normalizeTelegramChatId((string) ($chat['id'] ?? ''));
+        $incomingChatId = TelegramService::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
         if ($incomingChatId !== $configuredChatId) {
             if (config('app.debug')) {
                 Log::debug('telegram_webhook_chat_mismatch', [
@@ -58,7 +58,35 @@ class TelegramWebhookController extends Controller
         }
 
         $from = $message['from'] ?? null;
-        if (is_array($from) && !empty($from['is_bot'])) {
+        $token = Setting::get('telegram_bot_token');
+
+        if (is_array($from) && ! empty($from['is_bot'])) {
+            $ourBotId = TelegramService::getBotUserId($token);
+            if (! $ourBotId || (int) ($from['id'] ?? 0) !== $ourBotId) {
+                return response()->json(['ok' => true]);
+            }
+            // Сообщения нашего бота в группе — в дубль переписки (ответы ИИ/справка), без повторного запуска ИИ.
+            $messageId = (int) ($message['message_id'] ?? 0);
+            $text = isset($message['text']) ? (string) $message['text'] : null;
+            $date = isset($message['date']) ? (int) $message['date'] : null;
+            try {
+                TelegramGroupMessage::query()->firstOrCreate(
+                    [
+                        'chat_id' => $incomingChatId,
+                        'message_id' => $messageId,
+                    ],
+                    [
+                        'from_user_id' => (int) $from['id'],
+                        'from_username' => isset($from['username']) ? (string) $from['username'] : null,
+                        'from_first_name' => 'ИИ-агент',
+                        'text' => $text,
+                        'message_date' => $date ? now()->setTimestamp($date) : null,
+                    ]
+                );
+            } catch (\Throwable $e) {
+                Log::warning('telegram_group_message_store', ['e' => $e->getMessage()]);
+            }
+
             return response()->json(['ok' => true]);
         }
 
@@ -88,7 +116,6 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $token = Setting::get('telegram_bot_token');
         $provider = (string) Setting::get('ai_provider', 'openai');
         if (! in_array($provider, ['openai', 'deepseek'], true)) {
             $provider = 'openai';
@@ -219,10 +246,4 @@ class TelegramWebhookController extends Controller
         return $request->all();
     }
 
-    private static function normalizeTelegramChatId(string $id): string
-    {
-        $id = trim(str_replace(["\xc2\xa0", ' '], '', $id));
-
-        return $id;
-    }
 }

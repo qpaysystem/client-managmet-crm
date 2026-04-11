@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TelegramService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,7 @@ class TelegramGroupMessage extends Model
         bool $isSendFailure,
         string $successAuthorFirstName = 'ИИ-агент'
     ): void {
+        $chatId = TelegramService::normalizeChatIdForStorage($chatId);
         $mid = $telegramMessageId ?? self::syntheticOutgoingMessageId();
         $author = $isSendFailure ? 'Бот (ошибка)' : $successAuthorFirstName;
 
