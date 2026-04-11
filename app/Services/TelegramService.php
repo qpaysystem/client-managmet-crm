@@ -12,6 +12,16 @@ use Illuminate\Support\Facades\Log;
 
 class TelegramService
 {
+    /** Обрезка текста под лимит Telegram (без разметки). */
+    public static function truncatePlainMessage(string $text, int $maxLen = 4000): string
+    {
+        if (mb_strlen($text) <= $maxLen) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, $maxLen - 20)."\n…(обрезано)";
+    }
+
     /** Единый формат chat_id для БД и настроек (как в вебхуке). */
     public static function normalizeChatIdForStorage(string $id): string
     {

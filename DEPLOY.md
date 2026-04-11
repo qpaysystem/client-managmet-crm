@@ -20,6 +20,14 @@ php artisan migrate --force
 php artisan config:cache && php artisan route:cache && php artisan view:cache
 ```
 
+**Очередь и ответы ИИ в Telegram.** В `.env` на сервере должно быть `QUEUE_CONNECTION=database` (таблица `jobs` создаётся миграцией). Добавьте в cron **одну** строку — раз в минуту вызывается планировщик и обрабатывает очередь:
+
+```bash
+* * * * * cd /полный/путь/к/проекту && /usr/bin/php artisan schedule:run >> /dev/null 2>&1
+```
+
+Без cron задачи остаются в `jobs`, ответы в Telegram не приходят. В панели Timeweb: задачи Cron → команда `php artisan schedule:run` из каталога проекта.
+
 Либо один раз сделать скрипт исполняемым и запускать его:
 
 ```bash

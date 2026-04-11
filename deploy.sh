@@ -32,3 +32,4 @@ $PHP artisan route:cache
 $PHP artisan view:cache
 
 echo "==> done"
+echo "Напоминание: для ИИ в Telegram нужен cron на schedule:run (см. DEPLOY.md) и QUEUE_CONNECTION=database в .env."

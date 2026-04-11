@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessTelegramCrmAiJob;
+use App\Jobs\ProcessTelegramGroupAiJob;
 use App\Models\Setting;
 use App\Models\TelegramGroupMessage;
-use App\Services\OpenAiChatService;
 use App\Services\TelegramGroupAssistantService;
 use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
@@ -130,28 +131,7 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            $chatId = $incomingChatId;
-            $dispatchText = $text;
-            dispatch(function () use ($dispatchText, $token, $chatId): void {
-                if (function_exists('set_time_limit')) {
-                    @set_time_limit(240);
-                }
-                try {
-                    $ai = app(OpenAiChatService::class);
-                    $answer = $ai->answerTelegramGroupAgent($dispatchText);
-                    $out = TelegramWebhookController::truncateTelegramMessage($answer['content']);
-                    TelegramService::sendPlainMessage($token, $chatId, $out);
-                } catch (\Throwable $e) {
-                    Log::error('telegram_group_agent_after_response', ['message' => $e->getMessage()]);
-                    TelegramService::sendPlainMessage(
-                        $token,
-                        $chatId,
-                        'Не удалось получить ответ ИИ. Попробуйте позже.',
-                        true,
-                        'Бот (ошибка)'
-                    );
-                }
-            })->afterResponse();
+            ProcessTelegramGroupAiJob::dispatch($text, $incomingChatId)->onConnection('database');
 
             return response()->json(['ok' => true]);
         }
@@ -161,29 +141,7 @@ class TelegramWebhookController extends Controller
             $crmQuestion = TelegramGroupAssistantService::extractCrmAiQuestion($text);
             if ($crmQuestion !== null && $crmQuestion !== '') {
                 if ($token) {
-                    $chatId = $incomingChatId;
-                    dispatch(function () use ($crmQuestion, $token, $chatId): void {
-                        if (function_exists('set_time_limit')) {
-                            @set_time_limit(240);
-                        }
-                        try {
-                            $ai = app(OpenAiChatService::class);
-                            $answer = $ai->answerCrmQuestion($crmQuestion);
-                            $out = TelegramWebhookController::truncateTelegramMessage($answer['content']);
-                            TelegramService::sendPlainMessage($token, $chatId, $out);
-                        } catch (\Throwable $e) {
-                            Log::error('telegram_crm_ai_after_response', [
-                                'message' => $e->getMessage(),
-                            ]);
-                            TelegramService::sendPlainMessage(
-                                $token,
-                                $chatId,
-                                'Не удалось получить ответ ИИ. Попробуйте позже.',
-                                true,
-                                'Бот (ошибка)'
-                            );
-                        }
-                    })->afterResponse();
+                    ProcessTelegramCrmAiJob::dispatch($crmQuestion, $incomingChatId)->onConnection('database');
                 }
 
                 return response()->json(['ok' => true]);
@@ -211,15 +169,6 @@ class TelegramWebhookController extends Controller
         );
 
         return response()->json(['ok' => true]);
-    }
-
-    private static function truncateTelegramMessage(string $text, int $maxLen = 4000): string
-    {
-        if (mb_strlen($text) <= $maxLen) {
-            return $text;
-        }
-
-        return mb_substr($text, 0, $maxLen - 20) . "\n…(обрезано)";
     }
 
     /**
