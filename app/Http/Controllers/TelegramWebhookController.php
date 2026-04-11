@@ -119,7 +119,9 @@ class TelegramWebhookController extends Controller
                     TelegramService::sendPlainMessage(
                         $token,
                         $chatId,
-                        'Не удалось получить ответ ИИ. Попробуйте позже.'
+                        'Не удалось получить ответ ИИ. Попробуйте позже.',
+                        true,
+                        'Бот (ошибка)'
                     );
                 }
             })->afterResponse();
@@ -149,7 +151,9 @@ class TelegramWebhookController extends Controller
                             TelegramService::sendPlainMessage(
                                 $token,
                                 $chatId,
-                                'Не удалось получить ответ ИИ. Попробуйте позже.'
+                                'Не удалось получить ответ ИИ. Попробуйте позже.',
+                                true,
+                                'Бот (ошибка)'
                             );
                         }
                     })->afterResponse();
@@ -174,7 +178,9 @@ class TelegramWebhookController extends Controller
         TelegramService::sendPlainMessage(
             $token,
             $incomingChatId,
-            TelegramGroupAssistantService::HELP_CURRENT_INFO_REPLY
+            TelegramGroupAssistantService::HELP_CURRENT_INFO_REPLY,
+            true,
+            'Справка'
         );
 
         return response()->json(['ok' => true]);

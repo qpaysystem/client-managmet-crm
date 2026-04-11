@@ -6,6 +6,7 @@ use App\Models\BalanceTransaction;
 use App\Models\ConstructionStage;
 use App\Models\Setting;
 use App\Models\Task;
+use App\Models\TelegramGroupMessage;
 use Illuminate\Support\Facades\Log;
 
 class TelegramService
@@ -217,8 +218,17 @@ class TelegramService
         return ['ok' => true];
     }
 
-    public static function sendPlainMessage(string $token, string $chatId, string $text): bool
-    {
+    /**
+     * @param  bool  $recordInHistory  Дублировать в telegram_group_messages (вкладка «Сообщения Telegram» в админке).
+     * @param  string  $outgoingAuthorFirstName  Подпись исходящего сообщения при успешной отправке (для ответов об ошибке ИИ — «Бот (ошибка)»).
+     */
+    public static function sendPlainMessage(
+        string $token,
+        string $chatId,
+        string $text,
+        bool $recordInHistory = true,
+        string $outgoingAuthorFirstName = 'ИИ-агент'
+    ): bool {
         $url = "https://api.telegram.org/bot{$token}/sendMessage";
         $data = [
             'chat_id' => $chatId,
@@ -234,15 +244,42 @@ class TelegramService
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        $decoded = json_decode((string) $response, true);
+        $ok = $httpCode === 200 && is_array($decoded) && ($decoded['ok'] ?? false);
+        $msgId = ($ok && is_array($decoded) && isset($decoded['result']['message_id']))
+            ? (int) $decoded['result']['message_id']
+            : null;
+
+        if ($recordInHistory) {
+            if ($ok && $msgId !== null) {
+                TelegramGroupMessage::recordBotOutgoing($chatId, $msgId, $text, false, $outgoingAuthorFirstName);
+            } elseif ($ok) {
+                TelegramGroupMessage::recordBotOutgoing($chatId, null, $text, false, $outgoingAuthorFirstName);
+            } else {
+                $errDetail = 'HTTP '.$httpCode;
+                if (is_array($decoded)) {
+                    $errDetail .= ': '.($decoded['description'] ?? json_encode($decoded, JSON_UNESCAPED_UNICODE));
+                } else {
+                    $errDetail .= ': '.substr((string) $response, 0, 400);
+                }
+                TelegramGroupMessage::recordBotOutgoing(
+                    $chatId,
+                    null,
+                    'Не отправлено в Telegram. '.$errDetail,
+                    true
+                );
+            }
+        }
+
         if ($httpCode !== 200) {
             Log::warning('telegram_send_plain_http', ['http' => $httpCode, 'body' => substr((string) $response, 0, 500)]);
             return false;
         }
-        $decoded = json_decode($response, true);
-        $ok = is_array($decoded) && ($decoded['ok'] ?? false);
         if (!$ok && is_array($decoded)) {
             Log::warning('telegram_send_plain_api', ['description' => $decoded['description'] ?? $response]);
         }
+
         return $ok;
     }
 
