@@ -10,6 +10,8 @@ use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
 use App\Services\OpenAiChatService;
+use App\Services\TaskSituationReportService;
+use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,6 +20,9 @@ use Illuminate\View\View;
 
 class AiAssistantController extends Controller
 {
+    /** Маркер в конце ответа ассистента: после него ждём «да»/«нет» для отправки в Telegram. */
+    private const TELEGRAM_DIGEST_FOOTER = "\n\n---\nОтправить этот отчёт в Telegram? Ответьте «да» или «нет».";
+
     public function index(Request $request): View
     {
         $prompts = AiPrompt::orderByDesc('is_active')->orderByDesc('id')->get();
@@ -146,6 +151,62 @@ class AiAssistantController extends Controller
             'content' => $validated['content'],
         ]);
 
+        $content = $validated['content'];
+        $lastAssistant = $this->lastAssistantBefore($conversation, $userMessage->id);
+
+        if ($this->isPendingTelegramDigest($lastAssistant) && mb_strlen(trim($content)) <= 40) {
+            if ($this->isShortAffirmative($content)) {
+                $body = $this->extractDigestBody($lastAssistant);
+                $send = TelegramService::sendPlainTextToNotificationsChat($body);
+                $replyText = $send['ok']
+                    ? 'Готово: отчёт отправлен в Telegram (тот же чат, что и уведомления в настройках).'
+                    : 'Не удалось отправить в Telegram: ' . ($send['error'] ?? 'ошибка отправки.');
+                $assistantMessage = AiMessage::create([
+                    'conversation_id' => $conversation->id,
+                    'role' => AiMessage::ROLE_ASSISTANT,
+                    'content' => $replyText,
+                    'token_usage' => null,
+                ]);
+                $conversation->touch();
+                return response()->json([
+                    'ok' => true,
+                    'user_message' => $userMessage,
+                    'assistant_message' => $assistantMessage,
+                ]);
+            }
+            if ($this->isShortNegative($content)) {
+                $assistantMessage = AiMessage::create([
+                    'conversation_id' => $conversation->id,
+                    'role' => AiMessage::ROLE_ASSISTANT,
+                    'content' => 'Хорошо, в Telegram не отправляю.',
+                    'token_usage' => null,
+                ]);
+                $conversation->touch();
+                return response()->json([
+                    'ok' => true,
+                    'user_message' => $userMessage,
+                    'assistant_message' => $assistantMessage,
+                ]);
+            }
+        }
+
+        if ($this->isTasksSituationReportRequest($content)) {
+            $report = TaskSituationReportService::build();
+            $full = $report . self::TELEGRAM_DIGEST_FOOTER;
+            $assistantMessage = AiMessage::create([
+                'conversation_id' => $conversation->id,
+                'role' => AiMessage::ROLE_ASSISTANT,
+                'content' => $full,
+                'token_usage' => null,
+            ]);
+            $conversation->touch();
+            return response()->json([
+                'ok' => true,
+                'user_message' => $userMessage,
+                'assistant_message' => $assistantMessage,
+            ]);
+        }
+
         $context = $this->buildContext($conversation);
         $result = $chat->reply($conversation, $context);
 
@@ -212,6 +273,54 @@ class AiAssistantController extends Controller
         if ((int) $conversation->created_by_user_id !== (int) Auth::id()) {
             abort(403);
         }
+    }
+
+    private function lastAssistantBefore(AiConversation $conversation, int $beforeMessageId): ?AiMessage
+    {
+        return AiMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->where('id', '<', $beforeMessageId)
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    private function isPendingTelegramDigest(?AiMessage $lastAssistant): bool
+    {
+        return $lastAssistant !== null && str_ends_with($lastAssistant->content, self::TELEGRAM_DIGEST_FOOTER);
+    }
+
+    private function extractDigestBody(AiMessage $lastAssistant): string
+    {
+        $footer = self::TELEGRAM_DIGEST_FOOTER;
+        $c = $lastAssistant->content;
+        if (!str_ends_with($c, $footer)) {
+            return $c;
+        }
+        return rtrim(mb_substr($c, 0, mb_strlen($c) - mb_strlen($footer)));
+    }
+
+    private function isTasksSituationReportRequest(string $content): bool
+    {
+        $t = mb_strtolower(trim($content));
+        if (mb_strlen($t) < 10) {
+            return false;
+        }
+        $hasTasks = (bool) preg_match('/задач/u', $t);
+        $hasReport = (bool) preg_match('/отч[её]т|сводк|ситуац|обзор|положен/u', $t);
+        return $hasTasks && $hasReport;
+    }
+
+    private function isShortAffirmative(string $content): bool
+    {
+        $t = mb_strtolower(trim($content));
+        return (bool) preg_match('/^(да|ага|угу|yes|y|ок|окей|давай|отправь|отправить|отправляй)\s*[!?.]*$/u', $t);
+    }
+
+    private function isShortNegative(string $content): bool
+    {
+        $t = mb_strtolower(trim($content));
+        return (bool) preg_match('/^(нет|не|no|не надо|не нужно)\s*[!?.]*$/u', $t);
     }
 
     private function buildContext(AiConversation $conversation): array

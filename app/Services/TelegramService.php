@@ -192,6 +192,54 @@ class TelegramService
         return self::sendMessage($token, $chatId, $text);
     }
 
+    /**
+     * Отправка длинного текста без разметки (для сводок из ИИ-помощника и т.п.).
+     * Использует тот же chat_id, что и уведомления (группа/канал из настроек).
+     */
+    public static function sendPlainTextToNotificationsChat(string $text): array
+    {
+        $token = Setting::get('telegram_bot_token');
+        $chatId = Setting::get('telegram_chat_id');
+        if (!$token || !$chatId) {
+            return [
+                'ok' => false,
+                'error' => 'В настройках не заданы telegram_bot_token или telegram_chat_id.',
+            ];
+        }
+        $len = mb_strlen($text, 'UTF-8');
+        for ($offset = 0; $offset < $len; $offset += 4000) {
+            $chunk = mb_substr($text, $offset, 4000, 'UTF-8');
+            if (!self::sendPlainMessage($token, $chatId, $chunk)) {
+                return ['ok' => false, 'error' => 'Telegram API не принял сообщение (проверьте токен и chat_id).'];
+            }
+        }
+        return ['ok' => true];
+    }
+
+    public static function sendPlainMessage(string $token, string $chatId, string $text): bool
+    {
+        $url = "https://api.telegram.org/bot{$token}/sendMessage";
+        $data = [
+            'chat_id' => $chatId,
+            'text' => $text,
+        ];
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query($data, '', '&', PHP_QUERY_RFC3986),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 15,
+        ]);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($httpCode !== 200) {
+            return false;
+        }
+        $decoded = json_decode($response, true);
+        return is_array($decoded) && ($decoded['ok'] ?? false);
+    }
+
     public static function sendMessage(string $token, string $chatId, string $text): bool
     {
         $url = "https://api.telegram.org/bot{$token}/sendMessage";
