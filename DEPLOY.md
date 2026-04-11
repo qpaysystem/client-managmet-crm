@@ -28,6 +28,14 @@ php artisan config:cache && php artisan route:cache && php artisan view:cache
 
 Без cron задачи остаются в `jobs`, ответы в Telegram не приходят. В панели Timeweb: задачи Cron → команда `php artisan schedule:run` из каталога проекта.
 
+**Диагностика Telegram (вебхук, очередь, ошибки доставки от Telegram):**
+
+```bash
+/usr/bin/php artisan telegram:doctor
+```
+
+Если в выводе `last_error_message: Connection timed out` — серверы Telegram не достучались до `https://ваш-домен/telegram/webhook` (фаервол, не тот домен, SSL, хостинг). Пока это не исправлено, сообщения из группы в CRM не попадут. Проверьте `APP_URL` в `.env` и доступность сайта по HTTPS снаружи.
+
 Либо один раз сделать скрипт исполняемым и запускать его:
 
 ```bash
