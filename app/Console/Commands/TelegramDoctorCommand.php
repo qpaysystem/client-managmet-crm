@@ -21,6 +21,9 @@ class TelegramDoctorCommand extends Command
         $this->line('=== CRM / .env ===');
         $this->line('APP_URL: '.config('app.url'));
         $this->line('QUEUE_CONNECTION: '.config('queue.default'));
+        if (config('queue.default') === 'sync') {
+            $this->warn('Рекомендуется QUEUE_CONNECTION=database в .env, затем php artisan config:clear — ответы ИИ обрабатывает очередь + cron schedule:run.');
+        }
         $this->line('Ожидаемый URL вебхука: '.rtrim((string) config('app.url'), '/').'/telegram/webhook');
 
         $this->newLine();
