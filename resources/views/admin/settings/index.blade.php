@@ -65,9 +65,13 @@
                 <input type="checkbox" name="telegram_webhook_secret_clear" value="1" class="form-check-input" id="telegram_webhook_secret_clear">
                 <label class="form-check-label" for="telegram_webhook_secret_clear">Сбросить секрет webhook</label>
             </div>
-            <div class="form-check">
+            <div class="form-check mb-2">
                 <input type="checkbox" name="telegram_group_assistant_reply" value="1" class="form-check-input" id="telegram_group_assistant_reply" {{ ($settings['telegram_group_assistant_reply'] ?? '1') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="telegram_group_assistant_reply">Отвечать в группе на запрос актуальной информации («помоги получить текущую информацию» и похожее)</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="telegram_group_ai_crm" value="1" class="form-check-input" id="telegram_group_ai_crm" {{ ($settings['telegram_group_ai_crm'] ?? '1') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="telegram_group_ai_crm">ИИ по данным CRM в группе: команды <code>/вопрос …</code> и <code>/ask …</code>, а также короткие вопросы про квартиры, транзакции, задачи (нужен API key ИИ)</label>
             </div>
             <p class="text-muted small mt-2 mb-0">Бот должен быть в группе; в BotFather для бота отключите режим приватности (<code>/setprivacy</code> → Disable), иначе бот не увидит обычные сообщения. Chat ID выше должен совпадать с этой группой.</p>
         </div>
@@ -91,10 +95,14 @@
                 <label class="form-label">Model</label>
                 <input type="text" name="ai_model" class="form-control" value="{{ $settings['ai_model'] ?? '' }}" placeholder="gpt-4.1-mini / deepseek-chat">
             </div>
-            <div class="mb-0">
+            <div class="mb-3">
                 <label class="form-label">Base URL</label>
                 <input type="text" name="ai_base_url" class="form-control" value="{{ $settings['ai_base_url'] ?? '' }}" placeholder="https://api.openai.com/v1 / https://api.deepseek.com/v1">
                 <div class="form-text">Нужно только если используешь прокси/свой gateway. Можно без `/v1`.</div>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="ai_include_crm_snapshot" value="1" class="form-check-input" id="ai_include_crm_snapshot" {{ ($settings['ai_include_crm_snapshot'] ?? '0') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="ai_include_crm_snapshot">В чате «ИИ помощник» в админке подмешивать снимок данных CRM (квартиры, последние транзакции, задачи) — больше токенов на запрос</label>
             </div>
         </div>
     </div>

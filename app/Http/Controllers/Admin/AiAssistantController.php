@@ -8,7 +8,9 @@ use App\Models\AiMessage;
 use App\Models\AiPrompt;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\Setting;
 use App\Models\Task;
+use App\Services\CrmDataSnapshotService;
 use App\Services\OpenAiChatService;
 use App\Services\TaskSituationReportService;
 use App\Services\TelegramService;
@@ -329,7 +331,7 @@ class AiAssistantController extends Controller
         $project = $conversation->project_id ? Project::find($conversation->project_id) : null;
         $task = $conversation->task_id ? Task::with(['responsibleUser', 'project', 'client'])->find($conversation->task_id) : null;
 
-        return [
+        $ctx = [
             'client' => $client ? [
                 'id' => $client->id,
                 'full_name' => $client->full_name,
@@ -357,6 +359,16 @@ class AiAssistantController extends Controller
                 'client' => $task->client ? ['id' => $task->client->id, 'full_name' => $task->client->full_name] : null,
             ] : null,
         ];
+
+        if (Setting::get('ai_include_crm_snapshot', '0') === '1') {
+            try {
+                $ctx['crm_data_snapshot'] = CrmDataSnapshotService::build();
+            } catch (\Throwable) {
+                // не ломаем чат при ошибке снимка
+            }
+        }
+
+        return $ctx;
     }
 }
 

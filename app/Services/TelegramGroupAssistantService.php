@@ -37,4 +37,58 @@ class TelegramGroupAssistantService
 
         return (bool) preg_match('/помоги|получить|нужна|нужно|дайте|дай\b/u', $t);
     }
+
+    /**
+     * Текст вопроса для ИИ по данным CRM: команда /вопрос или /ask, либо «естественный» вопрос про цифры/транзакции.
+     */
+    public static function extractCrmAiQuestion(string $text): ?string
+    {
+        $cmd = self::extractCrmCommandQuestion($text);
+        if ($cmd !== null && trim($cmd) !== '') {
+            return trim($cmd);
+        }
+        if (self::isNaturalCrmDataQuestion($text)) {
+            return trim($text);
+        }
+
+        return null;
+    }
+
+    /**
+     * /вопрос текст… или /ask text… (поддержка @BotName в группах).
+     */
+    public static function extractCrmCommandQuestion(string $text): ?string
+    {
+        $t = trim($text);
+        if (preg_match('/^\/(вопрос|ask)(@[\w]+)?\s+(.+)$/uis', $t, $m)) {
+            return trim($m[3]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Короткий вопрос без команды: квартиры, транзакции, задачи (не пересекается с isHelpCurrentInfoRequest).
+     */
+    public static function isNaturalCrmDataQuestion(string $text): bool
+    {
+        if (trim($text) === '') {
+            return false;
+        }
+        if (self::isHelpCurrentInfoRequest($text)) {
+            return false;
+        }
+        $t = mb_strtolower(trim($text));
+        if (mb_strlen($t) > 400) {
+            return false;
+        }
+        if (preg_match('/сколько|какие|какая|какой|какое/u', $t) && preg_match('/квартир|транзакц|операц|баланс|клиент|задач/u', $t)) {
+            return true;
+        }
+        if (preg_match('/последн(ие|их|ая|ую)/u', $t) && preg_match('/транзакц|операц|пополнен|списан|займ/u', $t)) {
+            return true;
+        }
+
+        return false;
+    }
 }

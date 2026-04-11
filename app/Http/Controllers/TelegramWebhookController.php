@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Setting;
 use App\Models\TelegramGroupMessage;
+use App\Services\OpenAiChatService;
 use App\Services\TelegramGroupAssistantService;
 use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
@@ -82,11 +83,26 @@ class TelegramWebhookController extends Controller
             Log::warning('telegram_group_message_store', ['e' => $e->getMessage()]);
         }
 
-        if (Setting::get('telegram_group_assistant_reply', '1') !== '1') {
+        if ($text === null || $text === '') {
             return response()->json(['ok' => true]);
         }
 
-        if ($text === null || $text === '') {
+        if (Setting::get('telegram_group_ai_crm', '1') === '1') {
+            $crmQuestion = TelegramGroupAssistantService::extractCrmAiQuestion($text);
+            if ($crmQuestion !== null && $crmQuestion !== '') {
+                $token = Setting::get('telegram_bot_token');
+                if ($token) {
+                    $ai = app(OpenAiChatService::class);
+                    $answer = $ai->answerCrmQuestion($crmQuestion);
+                    $out = self::truncateTelegramMessage($answer['content']);
+                    TelegramService::sendPlainMessage($token, $incomingChatId, $out);
+                }
+
+                return response()->json(['ok' => true]);
+            }
+        }
+
+        if (Setting::get('telegram_group_assistant_reply', '1') !== '1') {
             return response()->json(['ok' => true]);
         }
 
@@ -106,6 +122,15 @@ class TelegramWebhookController extends Controller
         );
 
         return response()->json(['ok' => true]);
+    }
+
+    private static function truncateTelegramMessage(string $text, int $maxLen = 4000): string
+    {
+        if (mb_strlen($text) <= $maxLen) {
+            return $text;
+        }
+
+        return mb_substr($text, 0, $maxLen - 20) . "\n…(обрезано)";
     }
 
     /**
