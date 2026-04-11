@@ -46,10 +46,30 @@
                 <input type="checkbox" name="telegram_notify_tasks" value="1" class="form-check-input" id="telegram_notify_tasks" {{ ($settings['telegram_notify_tasks'] ?? '0') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="telegram_notify_tasks">Уведомления об изменениях в задачах (создание, изменение, удаление)</label>
             </div>
-            <div class="form-check">
+            <div class="form-check mb-3">
                 <input type="checkbox" name="telegram_notify_stages" value="1" class="form-check-input" id="telegram_notify_stages" {{ ($settings['telegram_notify_stages'] ?? '0') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="telegram_notify_stages">Уведомления об изменениях в этапах строительства (создание, изменение, удаление)</label>
             </div>
+            <hr class="my-3">
+            <p class="text-muted small mb-2">Входящие сообщения группы (лог переписки + ответ на фразу про «текущую информацию»): укажите URL webhook в BotFather и при необходимости секрет.</p>
+            <div class="mb-2">
+                <span class="form-label d-block">Webhook</span>
+                <code class="small user-select-all">{{ url('/telegram/webhook') }}</code>
+            </div>
+            <div class="mb-2">
+                <label class="form-label">Секрет webhook (опционально)</label>
+                <input type="password" name="telegram_webhook_secret" class="form-control" value="" autocomplete="new-password" placeholder="{{ !empty($settings['telegram_webhook_secret'] ?? '') ? 'оставьте пустым, чтобы не менять' : 'случайная строка' }}">
+                <small class="text-muted">При <code>setWebhook</code> укажите тот же <code>secret_token</code> или добавьте к URL <code>?secret=...</code>. @if(!empty($settings['telegram_webhook_secret'] ?? ''))<span class="text-success">Секрет сохранён.</span>@endif</small>
+            </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" name="telegram_webhook_secret_clear" value="1" class="form-check-input" id="telegram_webhook_secret_clear">
+                <label class="form-check-label" for="telegram_webhook_secret_clear">Сбросить секрет webhook</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="telegram_group_assistant_reply" value="1" class="form-check-input" id="telegram_group_assistant_reply" {{ ($settings['telegram_group_assistant_reply'] ?? '1') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="telegram_group_assistant_reply">Отвечать в группе на запрос актуальной информации («помоги получить текущую информацию» и похожее)</label>
+            </div>
+            <p class="text-muted small mt-2 mb-0">Бот должен быть в группе; в BotFather для бота отключите режим приватности (<code>/setprivacy</code> → Disable), иначе бот не увидит обычные сообщения. Chat ID выше должен совпадать с этой группой.</p>
         </div>
     </div>
     <div class="card mb-4">

@@ -17,8 +17,14 @@ use App\Http\Controllers\Frontend\ProductController as FrontendProductController
 use App\Http\Controllers\Cabinet\ClientAuthController;
 use App\Http\Controllers\Cabinet\CabinetController;
 use App\Http\Controllers\LandingController;
+use App\Http\Controllers\TelegramWebhookController;
 use App\Support\PwaIconGenerator;
 use Illuminate\Support\Facades\Route;
+
+// Telegram: webhook для группы (см. настройки — секрет, chat_id)
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])
+    ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class])
+    ->name('telegram.webhook');
 
 // Статика изображений (если сервер отдаёт всё в Laravel)
 Route::get('/images/logo.png', function () {
