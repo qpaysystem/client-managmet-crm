@@ -98,9 +98,8 @@ class AiAssistantController extends Controller
 
         $hint = null;
         if ($total > 0 && $outgoingInDb === 0) {
-            $hint = 'В базе только входящие сообщения участников. Ответы бота появляются после выката очереди и cron: '
-                .'QUEUE_CONNECTION=database, миграция jobs, в crontab раз в минуту `php artisan schedule:run`. '
-                .'Сообщения до настройки очереди в дубль не попадали.';
+            $hint = 'Ответов бота в таблице пока нет (есть только входящие). Для новых ответов: очередь database, cron `schedule:run`, ключ ИИ в настройках. '
+                .'Проверка на сервере: `php artisan telegram:doctor`. Старые ответы до появления дубля в БД не восстановить.';
         }
 
         return response()->json([
