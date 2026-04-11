@@ -24,6 +24,11 @@ class TelegramGroupAssistantService
             return true;
         }
 
+        // «помоги получить информацию» без слова «текущая»
+        if (preg_match('/помоги/u', $t) && preg_match('/получить/u', $t) && preg_match('/информац/u', $t)) {
+            return true;
+        }
+
         $hasCurrent = (bool) preg_match('/текущ|актуальн/u', $t);
         $hasInfo = (bool) preg_match('/информац|сведен/u', $t);
         if (!$hasCurrent || !$hasInfo) {

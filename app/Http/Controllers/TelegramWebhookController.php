@@ -22,10 +22,7 @@ class TelegramWebhookController extends Controller
             }
         }
 
-        $payload = $request->json()->all();
-        if ($payload === []) {
-            $payload = $request->all();
-        }
+        $payload = self::decodeTelegramPayload($request);
 
         $message = $payload['message'] ?? $payload['edited_message'] ?? null;
         if (!is_array($message)) {
@@ -42,13 +39,19 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        $configuredChatId = trim((string) Setting::get('telegram_chat_id', ''));
+        $configuredChatId = self::normalizeTelegramChatId((string) Setting::get('telegram_chat_id', ''));
         if ($configuredChatId === '') {
             return response()->json(['ok' => true]);
         }
 
-        $incomingChatId = (string) ($chat['id'] ?? '');
+        $incomingChatId = self::normalizeTelegramChatId((string) ($chat['id'] ?? ''));
         if ($incomingChatId !== $configuredChatId) {
+            if (config('app.debug')) {
+                Log::debug('telegram_webhook_chat_mismatch', [
+                    'incoming' => $incomingChatId,
+                    'configured' => $configuredChatId,
+                ]);
+            }
             return response()->json(['ok' => true]);
         }
 
@@ -103,5 +106,36 @@ class TelegramWebhookController extends Controller
         );
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Большие отрицательные chat_id в JSON без потери точности (иначе id «плывёт» и не совпадает с настройкой).
+     */
+    private static function decodeTelegramPayload(Request $request): array
+    {
+        $raw = $request->getContent();
+        if ($raw !== '') {
+            try {
+                $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+                if (is_array($data)) {
+                    return $data;
+                }
+            } catch (\Throwable) {
+                // fallback
+            }
+        }
+        $fallback = $request->json()->all();
+        if ($fallback !== []) {
+            return $fallback;
+        }
+
+        return $request->all();
+    }
+
+    private static function normalizeTelegramChatId(string $id): string
+    {
+        $id = trim(str_replace(["\xc2\xa0", ' '], '', $id));
+
+        return $id;
     }
 }

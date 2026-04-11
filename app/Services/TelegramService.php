@@ -6,6 +6,7 @@ use App\Models\BalanceTransaction;
 use App\Models\ConstructionStage;
 use App\Models\Setting;
 use App\Models\Task;
+use Illuminate\Support\Facades\Log;
 
 class TelegramService
 {
@@ -234,10 +235,15 @@ class TelegramService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         if ($httpCode !== 200) {
+            Log::warning('telegram_send_plain_http', ['http' => $httpCode, 'body' => substr((string) $response, 0, 500)]);
             return false;
         }
         $decoded = json_decode($response, true);
-        return is_array($decoded) && ($decoded['ok'] ?? false);
+        $ok = is_array($decoded) && ($decoded['ok'] ?? false);
+        if (!$ok && is_array($decoded)) {
+            Log::warning('telegram_send_plain_api', ['description' => $decoded['description'] ?? $response]);
+        }
+        return $ok;
     }
 
     public static function sendMessage(string $token, string $chatId, string $text): bool
