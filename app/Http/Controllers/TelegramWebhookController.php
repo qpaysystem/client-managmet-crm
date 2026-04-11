@@ -106,6 +106,9 @@ class TelegramWebhookController extends Controller
             $chatId = $incomingChatId;
             $dispatchText = $text;
             dispatch(function () use ($dispatchText, $token, $chatId): void {
+                if (function_exists('set_time_limit')) {
+                    @set_time_limit(240);
+                }
                 try {
                     $ai = app(OpenAiChatService::class);
                     $answer = $ai->answerTelegramGroupAgent($dispatchText);
@@ -131,6 +134,9 @@ class TelegramWebhookController extends Controller
                 if ($token) {
                     $chatId = $incomingChatId;
                     dispatch(function () use ($crmQuestion, $token, $chatId): void {
+                        if (function_exists('set_time_limit')) {
+                            @set_time_limit(240);
+                        }
                         try {
                             $ai = app(OpenAiChatService::class);
                             $answer = $ai->answerCrmQuestion($crmQuestion);

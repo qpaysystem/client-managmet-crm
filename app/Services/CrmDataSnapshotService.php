@@ -50,7 +50,7 @@ class CrmDataSnapshotService
         $recentTx = BalanceTransaction::query()
             ->with(['client:id,first_name,last_name'])
             ->orderByDesc('id')
-            ->limit(30)
+            ->limit(20)
             ->get()
             ->map(function (BalanceTransaction $t) {
                 return [

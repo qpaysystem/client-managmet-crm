@@ -6,6 +6,7 @@ use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiPrompt;
 use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -80,10 +81,19 @@ class OpenAiChatService
             return ['content' => 'ИИ не настроен: в админке укажите API key для выбранного провайдера.'];
         }
 
+        $snapshotTtl = max(5, (int) config('services.crm_snapshot_cache_ttl', 45));
         try {
-            $snapshot = CrmDataSnapshotService::build();
+            $t0 = microtime(true);
+            $snapshot = Cache::remember('crm_ai_snapshot_v1', $snapshotTtl, static function () {
+                return CrmDataSnapshotService::build();
+            });
+            $buildMs = (int) round((microtime(true) - $t0) * 1000);
+            if ($buildMs > 2000) {
+                Log::info('crm_snapshot_slow', ['ms' => $buildMs]);
+            }
         } catch (\Throwable $e) {
             Log::error('CrmDataSnapshotService failed', ['message' => $e->getMessage()]);
+            Cache::forget('crm_ai_snapshot_v1');
 
             return ['content' => 'Не удалось собрать данные из CRM для ответа.'];
         }
@@ -100,7 +110,9 @@ class OpenAiChatService
         ];
 
         try {
-            $response = Http::timeout(60)
+            $tHttp = microtime(true);
+            $response = Http::connectTimeout(12)
+                ->timeout(90)
                 ->withToken($apiKey)
                 ->acceptJson()
                 ->post("{$baseUrl}/chat/completions", [
@@ -108,6 +120,10 @@ class OpenAiChatService
                     'messages' => $messages,
                     'temperature' => $temperature,
                 ]);
+            $httpMs = (int) round((microtime(true) - $tHttp) * 1000);
+            if ($httpMs > 15000) {
+                Log::info('openai_chat_completions_slow', ['ms' => $httpMs, 'label' => $logLabel]);
+            }
 
             if (!$response->successful()) {
                 $errorText = $this->extractErrorText($response->body());

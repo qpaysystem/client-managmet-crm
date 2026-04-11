@@ -15,6 +15,8 @@ return [
         'model' => env('DEEPSEEK_MODEL', 'deepseek-chat'),
         'base_url' => env('DEEPSEEK_BASE_URL', 'https://api.deepseek.com/v1'),
     ],
+    /** Кеш снимка CRM для ИИ (сек). Снижает задержку при частых сообщениях в Telegram. */
+    'crm_snapshot_cache_ttl' => (int) env('CRM_SNAPSHOT_CACHE_TTL', 45),
     'jitsi' => [
         // Базовый URL сервера Jitsi Meet (без завершающего слэша).
         // Публичный: https://meet.jit.si
