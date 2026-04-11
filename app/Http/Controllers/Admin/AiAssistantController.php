@@ -67,6 +67,11 @@ class AiAssistantController extends Controller
 
         $total = TelegramGroupMessage::query()->where('chat_id', $chatId)->count();
 
+        $outgoingInDb = TelegramGroupMessage::query()
+            ->where('chat_id', $chatId)
+            ->whereIn('from_first_name', ['ИИ-агент', 'Бот (ошибка)', 'Справка'])
+            ->count();
+
         $rows = TelegramGroupMessage::query()
             ->where('chat_id', $chatId)
             ->orderByRaw('COALESCE(message_date, created_at) DESC')
@@ -91,12 +96,21 @@ class AiAssistantController extends Controller
             ];
         });
 
+        $hint = null;
+        if ($total > 0 && $outgoingInDb === 0) {
+            $hint = 'В базе только входящие сообщения участников. Ответы бота появляются после выката очереди и cron: '
+                .'QUEUE_CONNECTION=database, миграция jobs, в crontab раз в минуту `php artisan schedule:run`. '
+                .'Сообщения до настройки очереди в дубль не попадали.';
+        }
+
         return response()->json([
             'ok' => true,
             'chat_id' => $chatId,
             'messages' => $messages,
             'total_in_db' => $total,
+            'outgoing_in_db' => $outgoingInDb,
             'loaded' => $messages->count(),
+            'hint' => $hint,
         ]);
     }
 

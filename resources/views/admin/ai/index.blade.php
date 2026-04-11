@@ -566,10 +566,18 @@
                 tgChat.innerHTML = '<div class="text-danger">Не удалось загрузить сообщения.</div>';
                 return;
             }
-            if (data.hint) {
-                if (tgMetaHint) tgMetaHint.textContent = data.hint;
-            } else if (tgMetaHint) {
-                tgMetaHint.innerHTML = 'Chat ID: <code>' + escapeHtml(String(data.chat_id || '')) + '</code> · в базе: ' + (data.total_in_db ?? 0) + ' · показано: ' + (data.loaded ?? 0);
+            if (tgMetaHint) {
+                if (!data.chat_id && data.hint) {
+                    tgMetaHint.textContent = data.hint;
+                } else {
+                    let meta = 'Chat ID: <code>' + escapeHtml(String(data.chat_id || '')) + '</code> · в базе: ' + (data.total_in_db ?? 0)
+                        + ' · ответов бота в БД: ' + (data.outgoing_in_db ?? 0)
+                        + ' · показано: ' + (data.loaded ?? 0);
+                    if (data.hint) {
+                        meta += '<br><span class="text-warning">' + escapeHtml(data.hint) + '</span>';
+                    }
+                    tgMetaHint.innerHTML = meta;
+                }
             }
             tgChat.innerHTML = '';
             const list = data.messages || [];
