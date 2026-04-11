@@ -92,10 +92,25 @@ class TelegramWebhookController extends Controller
             if ($crmQuestion !== null && $crmQuestion !== '') {
                 $token = Setting::get('telegram_bot_token');
                 if ($token) {
-                    $ai = app(OpenAiChatService::class);
-                    $answer = $ai->answerCrmQuestion($crmQuestion);
-                    $out = self::truncateTelegramMessage($answer['content']);
-                    TelegramService::sendPlainMessage($token, $incomingChatId, $out);
+                    $chatId = $incomingChatId;
+                    // Telegram ждёт быстрый ответ на webhook; ИИ и sendMessage — после ответа клиенту.
+                    dispatch(function () use ($crmQuestion, $token, $chatId): void {
+                        try {
+                            $ai = app(OpenAiChatService::class);
+                            $answer = $ai->answerCrmQuestion($crmQuestion);
+                            $out = TelegramWebhookController::truncateTelegramMessage($answer['content']);
+                            TelegramService::sendPlainMessage($token, $chatId, $out);
+                        } catch (\Throwable $e) {
+                            Log::error('telegram_crm_ai_after_response', [
+                                'message' => $e->getMessage(),
+                            ]);
+                            TelegramService::sendPlainMessage(
+                                $token,
+                                $chatId,
+                                'Не удалось получить ответ ИИ. Попробуйте позже.'
+                            );
+                        }
+                    })->afterResponse();
                 }
 
                 return response()->json(['ok' => true]);
