@@ -303,17 +303,26 @@ class TelegramService
     ): bool {
         $chatId = self::normalizeChatIdForStorage($chatId);
         $url = "https://api.telegram.org/bot{$token}/sendMessage";
-        $data = [
+        $payload = [
             'chat_id' => $chatId,
             'text' => $text,
         ];
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+        $useJson = $json !== false;
+        if (! $useJson) {
+            Log::warning('telegram_send_plain_json_encode');
+        }
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        $opts = [
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => http_build_query($data, '', '&', PHP_QUERY_RFC3986),
+            CURLOPT_POSTFIELDS => $useJson ? $json : http_build_query($payload, '', '&', PHP_QUERY_RFC3986),
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 15,
-        ]);
+            CURLOPT_TIMEOUT => 30,
+        ];
+        if ($useJson) {
+            $opts[CURLOPT_HTTPHEADER] = ['Content-Type: application/json; charset=utf-8'];
+        }
+        curl_setopt_array($ch, $opts);
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

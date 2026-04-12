@@ -32,20 +32,32 @@ class ProcessTelegramGroupAiJob implements ShouldQueue
     {
         $token = Setting::get('telegram_bot_token');
         if ($token === '' || $token === null) {
+            Log::warning('telegram_group_ai_no_bot_token');
+
             return;
         }
 
         try {
             $ai = app(OpenAiChatService::class);
+            Log::info('telegram_group_ai_start', [
+                'chat' => $this->chatId,
+                'msg_len' => mb_strlen($this->userMessage),
+                'provider' => $ai->getResolvedCredentials()['provider'],
+            ]);
             $answer = $ai->answerTelegramGroupAgent($this->userMessage);
             $raw = (string) ($answer['content'] ?? '');
             $out = trim(TelegramService::truncatePlainMessage($raw));
             if ($out === '') {
                 $out = 'Пустой ответ ИИ — попробуйте переформулировать вопрос.';
             }
-            TelegramService::sendPlainMessage($token, $this->chatId, $out);
+            $ok = TelegramService::sendPlainMessage($token, $this->chatId, $out);
+            Log::info('telegram_group_ai_finish', ['chat' => $this->chatId, 'telegram_ok' => $ok, 'out_len' => mb_strlen($out)]);
         } catch (\Throwable $e) {
-            Log::error('telegram_group_agent_job', ['message' => $e->getMessage()]);
+            Log::error('telegram_group_agent_job', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             TelegramService::sendPlainMessage(
                 $token,
                 $this->chatId,

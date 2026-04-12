@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Setting;
 use App\Models\TelegramGroupMessage;
+use App\Services\OpenAiChatService;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,12 @@ class TelegramDoctorCommand extends Command
         $this->line('telegram_group_ai_all: '.(string) Setting::get('telegram_group_ai_all', '1'));
         $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', ''));
         $this->line('ai_api_key / openai: '.($apiKey !== '' ? 'задан' : '(пусто — ИИ в Telegram не запустится)'));
+        try {
+            $cred = app(OpenAiChatService::class)->getResolvedCredentials();
+            $this->line('ИИ (как у Telegram-агента): provider='.$cred['provider'].', apiKey='.(strlen($cred['apiKey']) > 0 ? 'ok('.strlen($cred['apiKey']).' симв.)' : 'ПУСТО').', model='.($cred['model'] !== '' ? $cred['model'] : '(пусто)'));
+        } catch (\Throwable $e) {
+            $this->warn('Не удалось прочитать resolveCredentials: '.$e->getMessage());
+        }
 
         $this->newLine();
         $this->line('=== Сообщения в telegram_group_messages ===');

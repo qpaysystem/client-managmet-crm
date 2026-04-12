@@ -140,16 +140,21 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '' && $apiKey !== '') {
             $fromId = isset($from['id']) ? (int) $from['id'] : 0;
             if (! Cache::add('telegram_ai_cd_'.$incomingChatId.'_'.$fromId, 1, 2)) {
+                Log::info('telegram_ai_skipped', ['reason' => 'cooldown_2s', 'chat' => $incomingChatId, 'from' => $fromId, 'message_id' => $messageId]);
+
                 return;
             }
             if (! Cache::add('telegram_ai_queued_'.$incomingChatId.'_'.$messageId, 1, 86400)) {
+                Log::info('telegram_ai_skipped', ['reason' => 'duplicate_message', 'chat' => $incomingChatId, 'message_id' => $messageId]);
+
                 return;
             }
             try {
-                // Синхронно в том же воркере — иначе вторая джоба могла не подхватиться между запусками cron.
-                ProcessTelegramGroupAiJob::dispatchSync($text, $incomingChatId);
+                // Прямой handle() — надёжнее, чем dispatchSync вложенной джобы из воркера очереди.
+                (new ProcessTelegramGroupAiJob($text, $incomingChatId))->handle();
             } catch (\Throwable $e) {
                 Cache::forget('telegram_ai_queued_'.$incomingChatId.'_'.$messageId);
+                Log::error('telegram_group_ai_handle', ['e' => $e->getMessage(), 'chat' => $incomingChatId]);
                 throw $e;
             }
 
@@ -164,7 +169,7 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
                         return;
                     }
                     try {
-                        ProcessTelegramCrmAiJob::dispatchSync($crmQuestion, $incomingChatId);
+                        (new ProcessTelegramCrmAiJob($crmQuestion, $incomingChatId))->handle();
                     } catch (\Throwable $e) {
                         Cache::forget('telegram_crm_ai_queued_'.$incomingChatId.'_'.$messageId);
                         throw $e;
