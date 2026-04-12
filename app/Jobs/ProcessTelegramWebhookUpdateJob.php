@@ -145,16 +145,17 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
 
                 return;
             }
-            if (! Cache::add('telegram_ai_queued_'.$incomingChatId.'_'.$messageId, 1, 86400)) {
-                Log::info('telegram_ai_skipped', ['reason' => 'duplicate_message', 'chat' => $incomingChatId, 'message_id' => $messageId]);
+            if ($messageId > 0 && Cache::has('telegram_ai_done_'.$incomingChatId.'_'.$messageId)) {
+                Log::info('telegram_ai_skipped', ['reason' => 'already_answered', 'chat' => $incomingChatId, 'message_id' => $messageId]);
 
                 return;
             }
+            // Старый ключ мог залипнуть на сутки при падении воркера — снимаем перед обработкой.
+            Cache::forget('telegram_ai_queued_'.$incomingChatId.'_'.$messageId);
+
             try {
-                // Прямой handle() — надёжнее, чем dispatchSync вложенной джобы из воркера очереди.
-                (new ProcessTelegramGroupAiJob($text, $incomingChatId))->handle();
+                (new ProcessTelegramGroupAiJob($text, $incomingChatId, $messageId))->handle();
             } catch (\Throwable $e) {
-                Cache::forget('telegram_ai_queued_'.$incomingChatId.'_'.$messageId);
                 Log::error('telegram_group_ai_handle', ['e' => $e->getMessage(), 'chat' => $incomingChatId]);
                 throw $e;
             }
@@ -204,5 +205,28 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             true,
             'Справка'
         );
+    }
+
+    /**
+     * После исчерпания попыток — снять старые блокировки, иначе повторная обработка того же message_id невозможна.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        $message = $this->payload['message'] ?? $this->payload['edited_message'] ?? null;
+        if (! is_array($message)) {
+            return;
+        }
+        $chat = $message['chat'] ?? null;
+        if (! is_array($chat)) {
+            return;
+        }
+        $incomingChatId = TelegramService::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
+        $messageId = (int) ($message['message_id'] ?? 0);
+        if ($incomingChatId === '' || $messageId <= 0) {
+            return;
+        }
+        Cache::forget('telegram_ai_queued_'.$incomingChatId.'_'.$messageId);
+        Cache::forget('telegram_crm_ai_queued_'.$incomingChatId.'_'.$messageId);
+        Log::warning('telegram_webhook_job_failed', ['chat' => $incomingChatId, 'message_id' => $messageId, 'e' => $e?->getMessage()]);
     }
 }
