@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Setting;
 use App\Models\TelegramGroupMessage;
+use App\Services\OpenAiChatService;
 use App\Services\TelegramGroupAssistantService;
 use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
@@ -119,11 +120,7 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             return;
         }
 
-        $provider = (string) Setting::get('ai_provider', 'openai');
-        if (! in_array($provider, ['openai', 'deepseek'], true)) {
-            $provider = 'openai';
-        }
-        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
+        $apiKey = app(OpenAiChatService::class)->getResolvedCredentials()['apiKey'];
 
         // Режим «все сообщения через ИИ» без ключа — раньше было полное молчание (условие ниже не выполнялось).
         if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '') {

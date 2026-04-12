@@ -13,6 +13,39 @@ use Illuminate\Support\Facades\Log;
 class OpenAiChatService
 {
     /**
+     * Единые настройки провайдера для админ-чата, Telegram и CRM-вопросов (DeepSeek / OpenAI из настроек).
+     *
+     * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
+     */
+    public function getResolvedCredentials(): array
+    {
+        return $this->resolveCredentials();
+    }
+
+    /**
+     * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
+     */
+    private function resolveCredentials(): array
+    {
+        $provider = (string) Setting::get('ai_provider', 'openai');
+        if (! in_array($provider, ['openai', 'deepseek'], true)) {
+            $provider = 'openai';
+        }
+
+        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
+        $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
+        $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
+        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
+
+        return [
+            'provider' => $provider,
+            'apiKey' => $apiKey,
+            'model' => $model,
+            'baseUrl' => $baseUrl,
+        ];
+    }
+
+    /**
      * Ответ на вопрос по данным CRM (один запрос, контекст — снимок БД).
      *
      * @return array{content:string,usage?:array}
@@ -112,15 +145,10 @@ class OpenAiChatService
             $userQuestion = mb_substr($userQuestion, 0, 4000);
         }
 
-        $provider = (string) Setting::get('ai_provider', 'openai');
-        if (!in_array($provider, ['openai', 'deepseek'], true)) {
-            $provider = 'openai';
-        }
-
-        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
-        $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
-        $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
-        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
+        $c = $this->resolveCredentials();
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
 
         if ($apiKey === '') {
             return ['content' => 'ИИ не настроен: в админке укажите API key для выбранного провайдера.'];
@@ -156,8 +184,8 @@ class OpenAiChatService
 
         try {
             $tHttp = microtime(true);
-            $response = Http::connectTimeout(12)
-                ->timeout(90)
+            $response = Http::connectTimeout(15)
+                ->timeout(120)
                 ->withToken($apiKey)
                 ->acceptJson()
                 ->post("{$baseUrl}/chat/completions", [
@@ -203,15 +231,10 @@ class OpenAiChatService
      */
     public function reply(AiConversation $conversation, array $context = []): array
     {
-        $provider = (string) Setting::get('ai_provider', 'openai');
-        if (!in_array($provider, ['openai', 'deepseek'], true)) {
-            $provider = 'openai';
-        }
-
-        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
-        $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
-        $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
-        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
+        $c = $this->resolveCredentials();
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
 
         if ($apiKey === '') {
             return [
