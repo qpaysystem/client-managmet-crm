@@ -19,6 +19,8 @@ return [
     'crm_snapshot_cache_ttl' => (int) env('CRM_SNAPSHOT_CACHE_TTL', 45),
     /** Макс. строк проданных квартир в JSON для ИИ (остальное — через агрегаты sold). */
     'crm_snapshot_sold_apartments_limit' => (int) env('CRM_SNAPSHOT_SOLD_APARTMENTS_LIMIT', 300),
+    /** Пауза между запросами ИИ от одного пользователя в группе (сек). 0 = выкл. Было жёстко 2 с — часто резало второе сообщение. */
+    'telegram_ai_cooldown_seconds' => (int) env('TELEGRAM_AI_COOLDOWN_SECONDS', 0),
     'jitsi' => [
         // Базовый URL сервера Jitsi Meet (без завершающего слэша).
         // Публичный: https://meet.jit.si

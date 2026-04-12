@@ -139,8 +139,9 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
 
         if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '' && $apiKey !== '') {
             $fromId = isset($from['id']) ? (int) $from['id'] : 0;
-            if (! Cache::add('telegram_ai_cd_'.$incomingChatId.'_'.$fromId, 1, 2)) {
-                Log::info('telegram_ai_skipped', ['reason' => 'cooldown_2s', 'chat' => $incomingChatId, 'from' => $fromId, 'message_id' => $messageId]);
+            $cooldownSec = max(0, (int) config('services.telegram_ai_cooldown_seconds', 0));
+            if ($cooldownSec > 0 && ! Cache::add('telegram_ai_cd_'.$incomingChatId.'_'.$fromId, 1, $cooldownSec)) {
+                Log::info('telegram_ai_skipped', ['reason' => 'cooldown', 'seconds' => $cooldownSec, 'chat' => $incomingChatId, 'from' => $fromId, 'message_id' => $messageId]);
 
                 return;
             }
