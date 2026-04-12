@@ -17,6 +17,8 @@ return [
     ],
     /** Кеш снимка CRM для ИИ (сек). Снижает задержку при частых сообщениях в Telegram. */
     'crm_snapshot_cache_ttl' => (int) env('CRM_SNAPSHOT_CACHE_TTL', 45),
+    /** Макс. строк проданных квартир в JSON для ИИ (остальное — через агрегаты sold). */
+    'crm_snapshot_sold_apartments_limit' => (int) env('CRM_SNAPSHOT_SOLD_APARTMENTS_LIMIT', 300),
     'jitsi' => [
         // Базовый URL сервера Jitsi Meet (без завершающего слэша).
         // Публичный: https://meet.jit.si

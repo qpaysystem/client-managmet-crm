@@ -247,7 +247,8 @@ class OpenAiChatService
         }
 
         try {
-            $response = Http::timeout(30)
+            $response = Http::connectTimeout(15)
+                ->timeout(120)
                 ->withToken($apiKey)
                 ->acceptJson()
                 ->post("{$baseUrl}/chat/completions", [
@@ -302,11 +303,15 @@ class OpenAiChatService
         }
 
         $json = json_encode($filtered, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!$json) {
+        if (! $json) {
             return null;
         }
 
-        return "CONTEXT (readonly CRM data):\n{$json}";
+        $intro = 'Ты — аналитик CRM. Ниже JSON с актуальными данными (только чтение). Отвечай по-русски по фактам из данных: ФИО покупателей, суммы и площади, списки квартир, транзакции, задачи. '
+            .'Используй поля `apartments.sold` (buyers_fio, living_area_total_m2, sold_apartments_sample), `balance_transactions.recent`, `clients`, `tasks`. '
+            .'Если нужного поля в снимке нет — так и скажи. Не выдумывай цифры.';
+
+        return $intro."\n\nCONTEXT (readonly CRM data):\n".$json;
     }
 
     private function normalizeBaseUrl(string $raw, string $provider): string

@@ -47,6 +47,54 @@ class CrmDataSnapshotService
             ])
             ->all();
 
+        $soldApartments = Apartment::query()
+            ->where('status', Apartment::STATUS_SOLD)
+            ->with(['project:id,name', 'client:id,first_name,last_name']);
+
+        $soldLivingAreaSum = (float) Apartment::query()
+            ->where('status', Apartment::STATUS_SOLD)
+            ->sum('living_area');
+
+        $soldCount = (int) Apartment::query()->where('status', Apartment::STATUS_SOLD)->count();
+
+        $soldListLimit = min(400, max(50, (int) config('services.crm_snapshot_sold_apartments_limit', 300)));
+        $soldList = $soldApartments->clone()
+            ->orderByDesc('id')
+            ->limit($soldListLimit)
+            ->get()
+            ->map(function (Apartment $a) {
+                return [
+                    'id' => $a->id,
+                    'project' => $a->project?->name,
+                    'apartment_number' => $a->apartment_number,
+                    'entrance' => $a->entrance,
+                    'floor' => $a->floor,
+                    'client_name' => $a->client ? trim(($a->client->first_name ?? '').' '.($a->client->last_name ?? '')) : null,
+                    'client_id' => $a->client_id,
+                    'living_area_m2' => $a->living_area !== null ? (string) $a->living_area : null,
+                    'price' => $a->price !== null ? (string) $a->price : null,
+                ];
+            })
+            ->all();
+
+        $buyerClientIds = Apartment::query()
+            ->where('status', Apartment::STATUS_SOLD)
+            ->whereNotNull('client_id')
+            ->distinct()
+            ->pluck('client_id');
+
+        $soldBuyersFio = Client::query()
+            ->whereIn('id', $buyerClientIds)
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name'])
+            ->map(fn (Client $c) => [
+                'id' => $c->id,
+                'full_name' => $c->full_name,
+            ])
+            ->values()
+            ->all();
+
         $recentTx = BalanceTransaction::query()
             ->with(['client:id,first_name,last_name'])
             ->orderByDesc('id')
@@ -93,6 +141,14 @@ class CrmDataSnapshotService
                 'by_status_counts' => $apartmentsHuman,
                 'free_total' => (int) (Apartment::query()->where('status', Apartment::STATUS_AVAILABLE)->count()),
                 'free_by_project_top' => $freeByProject,
+                'sold' => [
+                    'count' => $soldCount,
+                    'living_area_total_m2' => round($soldLivingAreaSum, 2),
+                    'unique_buyers_count' => count($soldBuyersFio),
+                    'buyers_fio' => $soldBuyersFio,
+                    'sold_apartments_sample' => $soldList,
+                    'note' => 'buyers_fio — покупатели проданных квартир (по привязке client_id). sold_apartments_sample — до '.$soldListLimit.' последних проданных; для полного списка ориентируйся на агрегаты.',
+                ],
             ],
             'balance_transactions' => [
                 'recent' => $recentTx,

@@ -433,7 +433,7 @@ class AiAssistantController extends Controller
             ] : null,
         ];
 
-        if (Setting::get('ai_include_crm_snapshot', '0') === '1') {
+        if (Setting::get('ai_include_crm_snapshot', '1') === '1') {
             try {
                 $ctx['crm_data_snapshot'] = CrmDataSnapshotService::build();
             } catch (\Throwable) {

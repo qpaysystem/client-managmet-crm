@@ -29,7 +29,7 @@ class SettingController extends Controller
             'telegram_group_assistant_reply' => Setting::get('telegram_group_assistant_reply', '1'),
             'telegram_group_ai_all' => Setting::get('telegram_group_ai_all', '1'),
             'telegram_group_ai_crm' => Setting::get('telegram_group_ai_crm', '1'),
-            'ai_include_crm_snapshot' => Setting::get('ai_include_crm_snapshot', '0'),
+            'ai_include_crm_snapshot' => Setting::get('ai_include_crm_snapshot', '1'),
             // New universal AI settings (preferred)
             'ai_provider' => $provider,
             'ai_model' => Setting::get('ai_model', $provider === 'deepseek'
@@ -93,7 +93,7 @@ class SettingController extends Controller
         Setting::set('telegram_group_assistant_reply', $request->get('telegram_group_assistant_reply', '1'));
         Setting::set('telegram_group_ai_all', $request->get('telegram_group_ai_all', '1'));
         Setting::set('telegram_group_ai_crm', $request->get('telegram_group_ai_crm', '1'));
-        Setting::set('ai_include_crm_snapshot', $request->get('ai_include_crm_snapshot', '0'));
+        Setting::set('ai_include_crm_snapshot', $request->boolean('ai_include_crm_snapshot') ? '1' : '0');
 
         if ($request->filled('ai_provider')) {
             Setting::set('ai_provider', $request->get('ai_provider'));
