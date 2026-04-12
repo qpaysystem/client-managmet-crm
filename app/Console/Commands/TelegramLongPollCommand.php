@@ -6,6 +6,7 @@ use App\Jobs\ProcessTelegramWebhookUpdateJob;
 use App\Models\Setting;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -19,7 +20,9 @@ class TelegramLongPollCommand extends Command
                             {--drop-pending : Вместе с --delete-webhook сбросить накопившиеся апдейты у Telegram}
                             {--timeout=50 : Long poll timeout 0–50 сек}';
 
-    protected $description = 'Long polling: getUpdates → та же очередь, что и вебхук (постоянный процесс; supervisor/screen)';
+    protected $description = 'Long polling: getUpdates → та же очередь, что и вебхук. Без запущенного процесса апдейты не идут (или включите вебхук).';
+
+    private const OFFSET_CACHE_KEY = 'telegram_long_poll_offset';
 
     public function handle(): int
     {
@@ -62,13 +65,13 @@ class TelegramLongPollCommand extends Command
 
                 return self::FAILURE;
             }
-            $this->info('Вебхук удалён. Long polling… (Ctrl+C для остановки)');
+            $this->info('Вебхук удалён. Long polling… (Ctrl+C останавливает приём — тогда снова не будет сообщений, пока не запустите эту команду или не вернёте вебхук).');
         } else {
             $this->warn('Убедитесь, что вебхук снят (иначе getUpdates вернёт конфликт).');
         }
 
-        $offset = 0;
-        $this->info('Очередь: database — как у вебхука. Ожидание апдейтов (timeout='.$timeout.'s)…');
+        $offset = (int) Cache::get(self::OFFSET_CACHE_KEY, 0);
+        $this->info('Очередь: database — как у вебхука. offset='.$offset.' (кэш). Ожидание апдейтов (timeout='.$timeout.'s)…');
 
         $httpTimeout = $timeout > 0 ? $timeout + 25 : 30;
 
@@ -125,6 +128,10 @@ class TelegramLongPollCommand extends Command
 
                 ProcessTelegramWebhookUpdateJob::dispatch($update)->onConnection('database');
                 $this->line('update_id='.$updateId.' → job');
+            }
+
+            if ($offset > 0) {
+                Cache::put(self::OFFSET_CACHE_KEY, $offset, now()->addDays(90));
             }
         }
     }
