@@ -92,7 +92,8 @@ class TelegramLongPollCommand extends Command
                 continue;
             }
 
-            $data = $response->json();
+            // Как в вебхуке: иначе chat.id у супергрупп может «плыть» (float) и не совпасть с telegram_chat_id.
+            $data = self::decodeTelegramJson((string) $response->body());
             if (! is_array($data) || empty($data['ok'])) {
                 $desc = is_array($data) ? (string) ($data['description'] ?? json_encode($data)) : $response->body();
                 if (str_contains($desc, 'Conflict') || str_contains($desc, 'getUpdates')) {
@@ -133,6 +134,23 @@ class TelegramLongPollCommand extends Command
             if ($offset > 0) {
                 Cache::put(self::OFFSET_CACHE_KEY, $offset, now()->addDays(90));
             }
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function decodeTelegramJson(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
+        try {
+            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING);
+
+            return is_array($data) ? $data : [];
+        } catch (\Throwable) {
+            return [];
         }
     }
 }

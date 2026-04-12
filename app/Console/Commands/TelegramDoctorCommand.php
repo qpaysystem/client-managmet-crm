@@ -41,6 +41,7 @@ class TelegramDoctorCommand extends Command
         $this->line('=== Настройки (settings), без секретов ===');
         $chatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
         $this->line('telegram_chat_id: '.($chatId !== '' ? $chatId : '(пусто)'));
+        $this->line('Если новые сообщения не сохраняются: id чата должен совпадать с текущим (после «супергруппы» id часто -100…; возьмите у @RawDataBot / @userinfobot в нужной группе).');
         $token = (string) Setting::get('telegram_bot_token', '');
         $this->line('telegram_bot_token: '.($token !== '' ? 'задан ('.strlen($token).' симв.)' : '(пусто)'));
         $secret = (string) Setting::get('telegram_webhook_secret', '');
@@ -106,7 +107,7 @@ class TelegramDoctorCommand extends Command
 
         if ($url === '') {
             $this->newLine();
-            $this->warn('Установите вебхук, например:');
+            $this->warn('Вебхук не используется — ок для схемы `php artisan telegram:poll` (long polling). Чтобы снова слать апдейты на сайт, установите вебхук:');
             $this->line('curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url='.urlencode(rtrim((string) config('app.url'), '/').$expectedPath).'"');
         } elseif (str_contains($url, $expectedPath) === false) {
             $this->warn('URL вебхука не содержит '.$expectedPath.' — проверьте маршрут в Laravel.');
