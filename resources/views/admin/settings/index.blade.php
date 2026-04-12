@@ -106,7 +106,7 @@
             </div>
             <div class="form-check">
                 <input type="checkbox" name="ai_include_crm_snapshot" value="1" class="form-check-input" id="ai_include_crm_snapshot" {{ ($settings['ai_include_crm_snapshot'] ?? '1') == '1' ? 'checked' : '' }}>
-                <label class="form-check-label" for="ai_include_crm_snapshot">В чате «ИИ помощник» подмешивать снимок CRM (квартиры, продажи, ФИО покупателей, транзакции, задачи) — больше токенов на запрос</label>
+                <label class="form-check-label" for="ai_include_crm_snapshot">В чате «ИИ помощник» подмешивать расширенный снимок CRM (клиенты, проекты, квартиры, транзакции, задачи, стройка, инвестиции, справочники) — больше токенов на запрос</label>
             </div>
         </div>
     </div>

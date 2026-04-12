@@ -19,6 +19,15 @@ return [
     'crm_snapshot_cache_ttl' => (int) env('CRM_SNAPSHOT_CACHE_TTL', 45),
     /** Макс. строк проданных квартир в JSON для ИИ (остальное — через агрегаты sold). */
     'crm_snapshot_sold_apartments_limit' => (int) env('CRM_SNAPSHOT_SOLD_APARTMENTS_LIMIT', 300),
+    /** Лимиты расширенного снимка CRM для ИИ (агент видит выборки, не всю БД целиком). */
+    'crm_snapshot_clients_limit' => (int) env('CRM_SNAPSHOT_CLIENTS_LIMIT', 250),
+    'crm_snapshot_available_apartments_limit' => (int) env('CRM_SNAPSHOT_AVAILABLE_APARTMENTS_LIMIT', 200),
+    'crm_snapshot_in_pledge_apartments_limit' => (int) env('CRM_SNAPSHOT_IN_PLEDGE_APARTMENTS_LIMIT', 200),
+    'crm_snapshot_tasks_open_limit' => (int) env('CRM_SNAPSHOT_TASKS_OPEN_LIMIT', 150),
+    'crm_snapshot_tasks_completed_limit' => (int) env('CRM_SNAPSHOT_TASKS_COMPLETED_LIMIT', 50),
+    'crm_snapshot_construction_stages_limit' => (int) env('CRM_SNAPSHOT_CONSTRUCTION_STAGES_LIMIT', 80),
+    'crm_snapshot_transactions_limit' => (int) env('CRM_SNAPSHOT_TRANSACTIONS_LIMIT', 60),
+    'crm_snapshot_investments_limit' => (int) env('CRM_SNAPSHOT_INVESTMENTS_LIMIT', 100),
     /** Пауза между запросами ИИ от одного пользователя в группе (сек). 0 = выкл. Было жёстко 2 с — часто резало второе сообщение. */
     'telegram_ai_cooldown_seconds' => (int) env('TELEGRAM_AI_COOLDOWN_SECONDS', 0),
     'jitsi' => [

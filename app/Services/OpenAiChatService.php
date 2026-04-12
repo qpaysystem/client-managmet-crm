@@ -57,7 +57,7 @@ class OpenAiChatService
             return ['content' => 'Задайте вопрос текстом (например: сколько свободных квартир).'];
         }
 
-        $system = 'Ты — аналитик CRM. Ниже JSON — актуальные агрегированные данные из базы (только чтение). '
+        $system = 'Ты — аналитик CRM. Ниже JSON — актуальный снимок данных из базы (агрегаты и ограниченные выборки, только чтение). '
             . 'Ответь на вопрос пользователя по-русски, кратко и по фактам из данных. '
             . 'Если в данных нет нужного — так и скажи. Не выдумывай цифры.';
 
@@ -77,9 +77,9 @@ class OpenAiChatService
         }
 
         $refusal = TelegramGroupAssistantService::OFF_TOPIC_REPLY;
-        $system = "Ты — агент CRM. Ниже JSON CRM_DATA_JSON — снимок базы (клиенты, проекты, квартиры, транзакции, задачи).\n\n"
+        $system = "Ты — агент CRM. Ниже JSON CRM_DATA_JSON — снимок базы: клиенты (в т.ч. sample), проекты со счётчиками квартир, квартиры по статусам и выборки (свободные, залог, продажи), транзакции с проектом/продуктом, задачи (открытые и недавно завершённые), этапы строительства, инвестиции клиентов в проекты, справочники custom_fields и products.\n\n"
             . "Это В компетенции — отвечай по JSON, не отказывай: «сколько свободных/свободно квартир», квартиры по статусам и проектам, "
-            . "транзакции, задачи, клиенты. Для вопроса про свободные квартиры используй apartments.free_total и apartments.by_status_counts.\n\n"
+            . "транзакции, задачи, клиенты, стройка. Для вопроса про свободные квартиры используй apartments.free_total и apartments.by_status_counts; детали — apartments.available_sample.\n\n"
             . "Отвечай по-русски кратко, только факты из JSON. Не выдумывай цифры.\n\n"
             . "Фразу «{$refusal}» используй ТОЛЬКО для явного оффтопа (погода, политика, шутки, личное без связи с CRM). "
             . 'Не отказывай на вопросы про квартиры, деньги, задачи, клиентов, если в JSON есть поля.';
@@ -105,7 +105,7 @@ class OpenAiChatService
             return $result;
         }
 
-        $snapshot = Cache::get('crm_ai_snapshot_v1');
+        $snapshot = Cache::get('crm_ai_snapshot_v2');
         if (! is_array($snapshot)) {
             return $result;
         }
@@ -157,7 +157,7 @@ class OpenAiChatService
         $snapshotTtl = max(5, (int) config('services.crm_snapshot_cache_ttl', 45));
         try {
             $t0 = microtime(true);
-            $snapshot = Cache::remember('crm_ai_snapshot_v1', $snapshotTtl, static function () {
+            $snapshot = Cache::remember('crm_ai_snapshot_v2', $snapshotTtl, static function () {
                 return CrmDataSnapshotService::build();
             });
             $buildMs = (int) round((microtime(true) - $t0) * 1000);
@@ -166,7 +166,7 @@ class OpenAiChatService
             }
         } catch (\Throwable $e) {
             Log::error('CrmDataSnapshotService failed', ['message' => $e->getMessage()]);
-            Cache::forget('crm_ai_snapshot_v1');
+            Cache::forget('crm_ai_snapshot_v2');
 
             return ['content' => 'Не удалось собрать данные из CRM для ответа.'];
         }
