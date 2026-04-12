@@ -26,28 +26,7 @@ class TelegramWebhookController extends Controller
 
         $payload = self::decodeTelegramPayload($request);
 
-        $message = $payload['message'] ?? $payload['edited_message'] ?? null;
-        if (! is_array($message)) {
-            return response()->json(['ok' => true]);
-        }
-
-        $chat = $message['chat'] ?? null;
-        if (! is_array($chat)) {
-            return response()->json(['ok' => true]);
-        }
-
-        $chatType = $chat['type'] ?? '';
-        if (! in_array($chatType, ['group', 'supergroup'], true)) {
-            return response()->json(['ok' => true]);
-        }
-
-        $configuredChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
-        if ($configuredChatId === '') {
-            return response()->json(['ok' => true]);
-        }
-
-        $incomingChatId = TelegramService::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
-        if ($incomingChatId !== $configuredChatId) {
+        if (! TelegramService::shouldQueueConfiguredGroupUpdate($payload)) {
             return response()->json(['ok' => true]);
         }
 

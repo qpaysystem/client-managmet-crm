@@ -28,6 +28,34 @@ class TelegramService
         return trim(str_replace(["\xc2\xa0", ' '], '', $id));
     }
 
+    /**
+     * Тот же фильтр, что у POST /telegram/webhook: только группа/супергруппа и совпадение telegram_chat_id.
+     *
+     * @param  array<string, mixed>  $payload  Объект Update от Telegram (message / edited_message).
+     */
+    public static function shouldQueueConfiguredGroupUpdate(array $payload): bool
+    {
+        $message = $payload['message'] ?? $payload['edited_message'] ?? null;
+        if (! is_array($message)) {
+            return false;
+        }
+        $chat = $message['chat'] ?? null;
+        if (! is_array($chat)) {
+            return false;
+        }
+        $chatType = $chat['type'] ?? '';
+        if (! in_array($chatType, ['group', 'supergroup'], true)) {
+            return false;
+        }
+        $configuredChatId = self::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
+        if ($configuredChatId === '') {
+            return false;
+        }
+        $incomingChatId = self::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
+
+        return $incomingChatId === $configuredChatId;
+    }
+
     /** ID пользователя бота по токену (кэш), чтобы отличать нашего бота от чужих в группе. */
     public static function getBotUserId(?string $token = null): ?int
     {
