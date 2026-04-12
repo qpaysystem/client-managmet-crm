@@ -10,7 +10,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Очередь ИИ для Telegram: без cron/worker задачи остаются в таблице jobs.
-        $schedule->command('queue:work database --stop-when-empty --max-time=55 --timeout=240')
+        // timeout/max-time ≥ джобы вебхука с OpenAI (до 300 с)
+        $schedule->command('queue:work database --stop-when-empty --max-time=320 --timeout=300')
             ->everyMinute()
             ->withoutOverlapping(5);
     }

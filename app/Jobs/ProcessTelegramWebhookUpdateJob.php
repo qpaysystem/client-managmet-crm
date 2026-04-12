@@ -24,7 +24,8 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public int $timeout = 120;
+    /** OpenAI + снимок БД могут занять несколько минут — один воркер выполняет всё подряд. */
+    public int $timeout = 300;
 
     public int $tries = 3;
 
@@ -132,7 +133,13 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             if (! Cache::add('telegram_ai_queued_'.$incomingChatId.'_'.$messageId, 1, 86400)) {
                 return;
             }
-            ProcessTelegramGroupAiJob::dispatch($text, $incomingChatId)->onConnection('database');
+            try {
+                // Синхронно в том же воркере — иначе вторая джоба могла не подхватиться между запусками cron.
+                ProcessTelegramGroupAiJob::dispatchSync($text, $incomingChatId);
+            } catch (\Throwable $e) {
+                Cache::forget('telegram_ai_queued_'.$incomingChatId.'_'.$messageId);
+                throw $e;
+            }
 
             return;
         }
@@ -144,7 +151,12 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
                     if (! Cache::add('telegram_crm_ai_queued_'.$incomingChatId.'_'.$messageId, 1, 86400)) {
                         return;
                     }
-                    ProcessTelegramCrmAiJob::dispatch($crmQuestion, $incomingChatId)->onConnection('database');
+                    try {
+                        ProcessTelegramCrmAiJob::dispatchSync($crmQuestion, $incomingChatId);
+                    } catch (\Throwable $e) {
+                        Cache::forget('telegram_crm_ai_queued_'.$incomingChatId.'_'.$messageId);
+                        throw $e;
+                    }
                 }
 
                 return;
