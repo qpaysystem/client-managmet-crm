@@ -38,7 +38,11 @@ class ProcessTelegramGroupAiJob implements ShouldQueue
         try {
             $ai = app(OpenAiChatService::class);
             $answer = $ai->answerTelegramGroupAgent($this->userMessage);
-            $out = TelegramService::truncatePlainMessage($answer['content']);
+            $raw = (string) ($answer['content'] ?? '');
+            $out = trim(TelegramService::truncatePlainMessage($raw));
+            if ($out === '') {
+                $out = 'Пустой ответ ИИ — попробуйте переформулировать вопрос.';
+            }
             TelegramService::sendPlainMessage($token, $this->chatId, $out);
         } catch (\Throwable $e) {
             Log::error('telegram_group_agent_job', ['message' => $e->getMessage()]);

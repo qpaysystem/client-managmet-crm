@@ -125,6 +125,21 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         }
         $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
 
+        // Режим «все сообщения через ИИ» без ключа — раньше было полное молчание (условие ниже не выполнялось).
+        if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '') {
+            if ($apiKey === '') {
+                TelegramService::sendPlainMessage(
+                    $token,
+                    $incomingChatId,
+                    'ИИ не отвечает: в CRM не задан API key (Настройки → блок «ИИ помощник», поле API key для провайдера).',
+                    true,
+                    'Бот (ошибка)'
+                );
+
+                return;
+            }
+        }
+
         if (Setting::get('telegram_group_ai_all', '1') === '1' && $token !== '' && $apiKey !== '') {
             $fromId = isset($from['id']) ? (int) $from['id'] : 0;
             if (! Cache::add('telegram_ai_cd_'.$incomingChatId.'_'.$fromId, 1, 2)) {
