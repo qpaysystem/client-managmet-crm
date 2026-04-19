@@ -14,6 +14,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('queue:work database --stop-when-empty --max-time=320 --timeout=300')
             ->everyMinute()
             ->withoutOverlapping(5);
+
+        // Раз в час: смешной тезис про стройку в Telegram (если включено в настройках).
+        $schedule->command('telegram:send-hourly-construction-thesis')
+            ->hourly()
+            ->withoutOverlapping(70);
     }
 
     protected function commands(): void

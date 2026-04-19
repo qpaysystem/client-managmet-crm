@@ -25,6 +25,7 @@ class SettingController extends Controller
             'telegram_notify_transactions' => Setting::get('telegram_notify_transactions', '0'),
             'telegram_notify_tasks' => Setting::get('telegram_notify_tasks', '0'),
             'telegram_notify_stages' => Setting::get('telegram_notify_stages', '0'),
+            'telegram_hourly_construction_thesis' => Setting::get('telegram_hourly_construction_thesis', '0'),
             'telegram_webhook_secret' => Setting::get('telegram_webhook_secret', ''),
             'telegram_group_assistant_reply' => Setting::get('telegram_group_assistant_reply', '1'),
             'telegram_group_ai_all' => Setting::get('telegram_group_ai_all', '1'),
@@ -58,6 +59,7 @@ class SettingController extends Controller
             'telegram_notify_transactions' => 'in:0,1',
             'telegram_notify_tasks' => 'in:0,1',
             'telegram_notify_stages' => 'in:0,1',
+            'telegram_hourly_construction_thesis' => 'in:0,1',
             'telegram_webhook_secret' => 'nullable|string|max:255',
             'telegram_webhook_secret_clear' => 'nullable|in:0,1',
             'telegram_group_assistant_reply' => 'in:0,1',
@@ -85,6 +87,7 @@ class SettingController extends Controller
         Setting::set('telegram_notify_transactions', $request->get('telegram_notify_transactions', '0'));
         Setting::set('telegram_notify_tasks', $request->get('telegram_notify_tasks', '0'));
         Setting::set('telegram_notify_stages', $request->get('telegram_notify_stages', '0'));
+        Setting::set('telegram_hourly_construction_thesis', $request->get('telegram_hourly_construction_thesis', '0'));
         if ($request->get('telegram_webhook_secret_clear') === '1') {
             Setting::set('telegram_webhook_secret', '');
         } elseif ($request->filled('telegram_webhook_secret')) {

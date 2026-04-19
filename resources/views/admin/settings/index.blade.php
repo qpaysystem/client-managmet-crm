@@ -50,6 +50,10 @@
                 <input type="checkbox" name="telegram_notify_stages" value="1" class="form-check-input" id="telegram_notify_stages" {{ ($settings['telegram_notify_stages'] ?? '0') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="telegram_notify_stages">Уведомления об изменениях в этапах строительства (создание, изменение, удаление)</label>
             </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" name="telegram_hourly_construction_thesis" value="1" class="form-check-input" id="telegram_hourly_construction_thesis" {{ ($settings['telegram_hourly_construction_thesis'] ?? '0') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="telegram_hourly_construction_thesis">Раз в час — один смешной «тезис про стройку» от ИИ в этот чат (нужны токен, chat_id и API key ИИ; срабатывает через cron <code>schedule:run</code>)</label>
+            </div>
             <hr class="my-3">
             <p class="text-muted small mb-2">Входящие сообщения группы (лог переписки + ответ на фразу про «текущую информацию»): укажите URL webhook в BotFather и при необходимости секрет.</p>
             <div class="mb-2">

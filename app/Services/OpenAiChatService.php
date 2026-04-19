@@ -90,6 +90,69 @@ class OpenAiChatService
     }
 
     /**
+     * Один короткий юмористический тезис про стройку / ремонт / стройплощадку (для почасовой рассылки в Telegram).
+     *
+     * @return array{content:string,usage?:array}
+     */
+    public function generateHourlyConstructionThesis(): array
+    {
+        $c = $this->resolveCredentials();
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
+
+        if ($apiKey === '') {
+            return ['content' => ''];
+        }
+
+        $system = 'Ты — остроумный наблюдатель стройки. Ответь ОДНИМ коротким тезисом по-русски (1–3 предложения максимум). '
+            .'Тема: строительство, ремонт, прорабы, сметы, сроки, краны, бетон, переносы, идеальные проекты и реальность. '
+            .'Ирония и лёгкий юмор, без токсичности, без политики, без оскорблений групп людей, без мата. '
+            .'Не используй markdown и кавычки-ёлочки. Каждый раз новая мысль, не повторяй штампы.';
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => 'Пиши один тезис.'],
+        ];
+
+        try {
+            $response = Http::connectTimeout(15)
+                ->timeout(60)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->post("{$baseUrl}/chat/completions", [
+                    'model' => $model,
+                    'messages' => $messages,
+                    'temperature' => 0.88,
+                    'max_tokens' => 220,
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('OpenAI hourly construction thesis failed', [
+                    'status' => $response->status(),
+                    'body' => mb_substr((string) $response->body(), 0, 400),
+                ]);
+
+                return ['content' => ''];
+            }
+
+            $json = $response->json();
+            $content = (string) ($json['choices'][0]['message']['content'] ?? '');
+            $usage = $json['usage'] ?? null;
+
+            if ($content === '') {
+                return ['content' => '', 'usage' => is_array($usage) ? $usage : null];
+            }
+
+            return ['content' => trim($content), 'usage' => is_array($usage) ? $usage : null];
+        } catch (\Throwable $e) {
+            Log::error('OpenAI hourly construction thesis exception', ['message' => $e->getMessage()]);
+
+            return ['content' => ''];
+        }
+    }
+
+    /**
      * @param  array{content:string,usage?:array}  $result
      * @return array{content:string,usage?:array}
      */
