@@ -575,6 +575,7 @@ class OpenAiChatService
 
         $intro = 'Ты — аналитик CRM. Ниже JSON с актуальными данными (только чтение). Отвечай по-русски по фактам из данных: ФИО покупателей, суммы и площади, списки квартир, транзакции, задачи. '
             .'Используй поля `apartments.sold` (buyers_fio, living_area_total_m2, sold_apartments_sample), `balance_transactions.recent`, `clients`, `tasks`. '
+            .'Если есть `company_events` — это зафиксированные события компании (могут влиять на общую картину предприятия); учитывай их в анализе и при совещаниях. '
             .'Если нужного поля в снимке нет — так и скажи. Не выдумывай цифры.';
 
         return $intro."\n\nCONTEXT (readonly CRM data):\n".$json;

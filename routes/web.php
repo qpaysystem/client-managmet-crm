@@ -198,6 +198,12 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
     Route::put('ai/prompts/{prompt}', [AiAssistantController::class, 'promptsUpdate'])->name('ai.prompts.update');
     Route::post('ai/prompts/{prompt}/activate', [AiAssistantController::class, 'promptsActivate'])->name('ai.prompts.activate');
 
+    Route::get('ai/company-events', [AiAssistantController::class, 'companyEventsIndex'])->name('ai.company-events.index');
+    Route::get('ai/company-events/{companyEvent}', [AiAssistantController::class, 'companyEventsShow'])->name('ai.company-events.show');
+    Route::post('ai/company-events', [AiAssistantController::class, 'companyEventsStore'])->name('ai.company-events.store');
+    Route::put('ai/company-events/{companyEvent}', [AiAssistantController::class, 'companyEventsUpdate'])->name('ai.company-events.update');
+    Route::delete('ai/company-events/{companyEvent}', [AiAssistantController::class, 'companyEventsDestroy'])->name('ai.company-events.destroy');
+
     // Conversations
     Route::get('ai/conversations', [AiAssistantController::class, 'conversationsIndex'])->name('ai.conversations.index');
     Route::post('ai/conversations', [AiAssistantController::class, 'conversationsStore'])->name('ai.conversations.store');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AiCompanyEvent;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiPrompt;
@@ -43,7 +44,53 @@ class AiAssistantController extends Controller
 
         $telegramChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
 
-        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId'));
+        $companyEvents = AiCompanyEvent::query()->orderByDesc('id')->limit(300)->get();
+
+        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId', 'companyEvents'));
+    }
+
+    public function companyEventsIndex(): JsonResponse
+    {
+        $events = AiCompanyEvent::query()->orderByDesc('id')->limit(500)->get();
+
+        return response()->json(['events' => $events]);
+    }
+
+    public function companyEventsShow(AiCompanyEvent $companyEvent): JsonResponse
+    {
+        return response()->json(['event' => $companyEvent]);
+    }
+
+    public function companyEventsStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'description' => 'required|string|max:50000',
+        ]);
+
+        $event = AiCompanyEvent::create([
+            'description' => $validated['description'],
+            'created_by_user_id' => Auth::id(),
+        ]);
+
+        return response()->json(['ok' => true, 'event' => $event]);
+    }
+
+    public function companyEventsUpdate(Request $request, AiCompanyEvent $companyEvent): JsonResponse
+    {
+        $validated = $request->validate([
+            'description' => 'required|string|max:50000',
+        ]);
+
+        $companyEvent->update(['description' => $validated['description']]);
+
+        return response()->json(['ok' => true, 'event' => $companyEvent->fresh()]);
+    }
+
+    public function companyEventsDestroy(AiCompanyEvent $companyEvent): JsonResponse
+    {
+        $companyEvent->delete();
+
+        return response()->json(['ok' => true]);
     }
 
     /**
@@ -662,6 +709,22 @@ class AiAssistantController extends Controller
             } catch (\Throwable) {
                 // не ломаем чат при ошибке снимка
             }
+        }
+
+        $companyEvents = AiCompanyEvent::query()
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get()
+            ->map(fn (AiCompanyEvent $e) => [
+                'id' => $e->id,
+                'recorded_at' => $e->created_at?->format('Y-m-d H:i'),
+                'description' => $e->description,
+            ])
+            ->values()
+            ->all();
+
+        if ($companyEvents !== []) {
+            $ctx['company_events'] = $companyEvents;
         }
 
         return $ctx;

@@ -10,6 +10,9 @@
         <button class="nav-link active" id="tab-prompts" data-bs-toggle="tab" data-bs-target="#pane-prompts" type="button" role="tab">Промпт</button>
     </li>
     <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-events" data-bs-toggle="tab" data-bs-target="#pane-events" type="button" role="tab">События компании</button>
+    </li>
+    <li class="nav-item" role="presentation">
         <button class="nav-link" id="tab-chat" data-bs-toggle="tab" data-bs-target="#pane-chat" type="button" role="tab">Чат</button>
     </li>
     <li class="nav-item" role="presentation">
@@ -70,6 +73,48 @@
                         <div class="alert alert-success mt-3 d-none" id="prompt-success"></div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-pane fade" id="pane-events" role="tabpanel">
+        <div class="card mb-3">
+            <div class="card-body">
+                <p class="text-muted small mb-3">
+                    Фиксируйте значимые события (факты, решения, изменения), которые влияют на общую картину предприятия.
+                    Они автоматически попадают в контекст ИИ при чате и при режиме «Совещание» (вместе с промптом и данными CRM).
+                </p>
+                <form id="company-event-form">
+                    <input type="hidden" id="company-event-id" value="">
+                    <label class="form-label">Описание события</label>
+                    <textarea class="form-control" id="company-event-description" rows="8" maxlength="50000" placeholder="Сформулируйте, что произошло и почему это важно для компании…" required></textarea>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary" id="btn-company-event-save">Сохранить</button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-company-event-new">Новое событие</button>
+                    </div>
+                </form>
+                <div class="alert alert-danger mt-3 d-none" id="company-event-error"></div>
+                <div class="alert alert-success mt-3 d-none" id="company-event-success"></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><strong>Журнал событий</strong> <span class="text-muted small">(новые сверху)</span></div>
+            <div class="list-group list-group-flush" id="company-event-list">
+                @forelse($companyEvents as $ev)
+                    <div class="list-group-item company-event-item py-3"
+                         data-event-id="{{ $ev->id }}">
+                        <div class="d-flex justify-content-between gap-2 flex-wrap">
+                            <span class="text-muted small">#{{ $ev->id }} · {{ $ev->created_at?->format('d.m.Y H:i') }}</span>
+                            <div class="btn-group btn-group-sm">
+                                <button type="button" class="btn btn-outline-primary btn-company-event-edit">Редактировать</button>
+                                <button type="button" class="btn btn-outline-danger btn-company-event-delete">Удалить</button>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-break" style="white-space: pre-wrap;">{{ \Illuminate\Support\Str::limit($ev->description, 400) }}</div>
+                    </div>
+                @empty
+                    <div class="p-3 text-muted" id="company-event-empty">Событий пока нет.</div>
+                @endforelse
             </div>
         </div>
     </div>
@@ -659,6 +704,166 @@
     if (ctxClient && ctxProject && ctxTask) {
         reloadContext();
     }
+
+    // ----- События компании -----
+    const companyEventForm = document.getElementById('company-event-form');
+    const companyEventId = document.getElementById('company-event-id');
+    const companyEventDesc = document.getElementById('company-event-description');
+    const companyEventList = document.getElementById('company-event-list');
+    const btnCompanyEventNew = document.getElementById('btn-company-event-new');
+    const companyEventError = document.getElementById('company-event-error');
+    const companyEventSuccess = document.getElementById('company-event-success');
+
+    function showCompanyEventErr(msg) {
+        if (!companyEventError) return;
+        companyEventError.textContent = msg || 'Ошибка';
+        companyEventError.classList.remove('d-none');
+        if (companyEventSuccess) companyEventSuccess.classList.add('d-none');
+    }
+    function showCompanyEventOk(msg) {
+        if (!companyEventSuccess) return;
+        companyEventSuccess.textContent = msg || 'Готово';
+        companyEventSuccess.classList.remove('d-none');
+        companyEventError && companyEventError.classList.add('d-none');
+        setTimeout(() => companyEventSuccess.classList.add('d-none'), 2000);
+    }
+    function clearCompanyEventForm() {
+        if (companyEventId) companyEventId.value = '';
+        if (companyEventDesc) companyEventDesc.value = '';
+    }
+
+    function truncateEvText(s, n) {
+        s = s || '';
+        if (s.length <= n) return s;
+        return s.slice(0, n - 1) + '…';
+    }
+
+    function formatEventDate(ev) {
+        if (!ev.created_at) return '';
+        const t = String(ev.created_at);
+        return t.replace('T', ' ').slice(0, 16);
+    }
+
+    function buildCompanyEventRow(ev) {
+        const div = document.createElement('div');
+        div.className = 'list-group-item company-event-item py-3';
+        div.dataset.eventId = String(ev.id);
+        const dt = formatEventDate(ev);
+        div.innerHTML =
+            '<div class="d-flex justify-content-between gap-2 flex-wrap">' +
+            '<span class="text-muted small">#' + ev.id + ' · ' + escapeHtml(dt) + '</span>' +
+            '<div class="btn-group btn-group-sm">' +
+            '<button type="button" class="btn btn-outline-primary btn-company-event-edit">Редактировать</button>' +
+            '<button type="button" class="btn btn-outline-danger btn-company-event-delete">Удалить</button>' +
+            '</div></div>' +
+            '<div class="mt-2 text-break" style="white-space: pre-wrap;">' +
+            escapeHtml(truncateEvText(ev.description, 400)) + '</div>';
+        return div;
+    }
+
+    function bindCompanyEventItem(div) {
+        div.querySelector('.btn-company-event-edit')?.addEventListener('click', async () => {
+            const id = div.dataset.eventId;
+            try {
+                const url = `{{ route('admin.ai.company-events.show', ['companyEvent' => '__ID__']) }}`.replace('__ID__', id);
+                const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await r.json();
+                if (!r.ok || !data.event) {
+                    showCompanyEventErr('Не удалось загрузить событие');
+                    return;
+                }
+                if (companyEventId) companyEventId.value = String(data.event.id);
+                if (companyEventDesc) {
+                    companyEventDesc.value = data.event.description || '';
+                    companyEventDesc.focus();
+                }
+            } catch (e) {
+                showCompanyEventErr('Ошибка сети');
+            }
+        });
+        div.querySelector('.btn-company-event-delete')?.addEventListener('click', async () => {
+            if (!confirm('Удалить это событие из журнала?')) return;
+            const id = div.dataset.eventId;
+            try {
+                const url = `{{ route('admin.ai.company-events.destroy', ['companyEvent' => '__ID__']) }}`.replace('__ID__', id);
+                const r = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const data = await r.json();
+                if (!r.ok || !data.ok) {
+                    showCompanyEventErr('Не удалось удалить');
+                    return;
+                }
+                div.remove();
+                showCompanyEventOk('Удалено');
+                if (companyEventId && String(companyEventId.value) === String(id)) clearCompanyEventForm();
+                if (companyEventList && !companyEventList.querySelector('.company-event-item')) {
+                    companyEventList.innerHTML = '<div class="p-3 text-muted" id="company-event-empty">Событий пока нет.</div>';
+                }
+            } catch (e) {
+                showCompanyEventErr('Ошибка сети');
+            }
+        });
+    }
+
+    document.querySelectorAll('#company-event-list .company-event-item').forEach(bindCompanyEventItem);
+
+    btnCompanyEventNew && btnCompanyEventNew.addEventListener('click', () => {
+        clearCompanyEventForm();
+        if (companyEventError) companyEventError.classList.add('d-none');
+    });
+
+    companyEventForm && companyEventForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (companyEventError) companyEventError.classList.add('d-none');
+        const desc = (companyEventDesc && companyEventDesc.value) ? companyEventDesc.value.trim() : '';
+        if (!desc) return;
+        const id = companyEventId && companyEventId.value;
+        try {
+            let url = `{{ route('admin.ai.company-events.store') }}`;
+            let method = 'POST';
+            if (id) {
+                url = `{{ route('admin.ai.company-events.update', ['companyEvent' => '__ID__']) }}`.replace('__ID__', id);
+                method = 'PUT';
+            }
+            const r = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ description: desc }),
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                showCompanyEventErr((data && data.message) || 'Не сохранено');
+                return;
+            }
+            showCompanyEventOk(id ? 'Обновлено' : 'Добавлено');
+            if (data.event && companyEventList) {
+                const empty = companyEventList.querySelector('#company-event-empty');
+                if (empty) empty.remove();
+                if (!id) {
+                    const row = buildCompanyEventRow(data.event);
+                    companyEventList.insertBefore(row, companyEventList.firstChild);
+                    bindCompanyEventItem(row);
+                } else {
+                    const old = companyEventList.querySelector('[data-event-id="' + id + '"]');
+                    if (old) {
+                        const row = buildCompanyEventRow(data.event);
+                        old.replaceWith(row);
+                        bindCompanyEventItem(row);
+                    }
+                }
+            }
+            clearCompanyEventForm();
+        } catch (err) {
+            showCompanyEventErr('Ошибка сети');
+        }
+    });
 
     // ----- Telegram group messages (duplicate of group chat) -----
     const tgChat = document.getElementById('tg-chat');
