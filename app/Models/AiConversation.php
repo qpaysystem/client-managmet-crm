@@ -14,6 +14,14 @@ class AiConversation extends Model
         'client_id',
         'project_id',
         'task_id',
+        'kind',
+        'meeting_at',
+        'meeting_finalized_at',
+    ];
+
+    protected $casts = [
+        'meeting_at' => 'datetime',
+        'meeting_finalized_at' => 'datetime',
     ];
 
     public function createdBy(): BelongsTo

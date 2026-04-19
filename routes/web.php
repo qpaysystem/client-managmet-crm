@@ -203,4 +203,5 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
     Route::post('ai/conversations', [AiAssistantController::class, 'conversationsStore'])->name('ai.conversations.store');
     Route::get('ai/conversations/{conversation}', [AiAssistantController::class, 'conversationsShow'])->name('ai.conversations.show');
     Route::post('ai/conversations/{conversation}/messages', [AiAssistantController::class, 'messagesStore'])->name('ai.messages.store');
+    Route::post('ai/conversations/{conversation}/apply-meeting-tasks', [AiAssistantController::class, 'applyMeetingTasks'])->name('ai.conversations.apply-meeting-tasks');
 });

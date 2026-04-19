@@ -6,6 +6,7 @@ use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiPrompt;
 use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -379,6 +380,185 @@ class OpenAiChatService
                 'content' => 'Не удалось получить ответ от ИИ (ошибка соединения).',
             ];
         }
+    }
+
+    /**
+     * Режим совещания: активный промпт + инструкции модератора + справочник сотрудников.
+     *
+     * @return array{content:string,usage?:array}
+     */
+    public function replyMeeting(AiConversation $conversation, array $context = []): array
+    {
+        $c = $this->resolveCredentials();
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
+
+        if ($apiKey === '') {
+            return [
+                'content' => 'AI API key is not configured.',
+            ];
+        }
+
+        $systemPrompt = AiPrompt::where('is_active', true)->orderByDesc('id')->value('system_prompt');
+        $systemPrompt = $systemPrompt ?: 'Ты помогаешь вести совещание в CRM.';
+
+        $staff = User::query()->orderBy('name')->get(['id', 'name', 'email'])->map(fn (User $u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+            'email' => $u->email,
+        ])->values()->all();
+
+        $staffJson = json_encode($staff, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $systemPrompt .= "\n\n---\n".MeetingAiService::facilitatorInstructions();
+        $systemPrompt .= "\n\nСправочник сотрудников (назначай ответственных только по id из этого JSON):\n".$staffJson;
+
+        $messages = [];
+        $messages[] = ['role' => 'system', 'content' => $systemPrompt];
+
+        $contextText = $this->formatContext($context);
+        if ($contextText !== null) {
+            $messages[] = ['role' => 'system', 'content' => $contextText];
+        }
+
+        $history = $conversation->messages()
+            ->whereIn('role', [AiMessage::ROLE_USER, AiMessage::ROLE_ASSISTANT])
+            ->orderByDesc('id')
+            ->limit(34)
+            ->get()
+            ->reverse()
+            ->values();
+
+        foreach ($history as $m) {
+            $messages[] = [
+                'role' => $m->role,
+                'content' => $m->content,
+            ];
+        }
+
+        try {
+            $response = Http::connectTimeout(15)
+                ->timeout(120)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->post("{$baseUrl}/chat/completions", [
+                    'model' => $model,
+                    'messages' => $messages,
+                    'temperature' => 0.45,
+                    'max_tokens' => 2500,
+                ]);
+
+            if (! $response->successful()) {
+                $errorText = $this->extractErrorText($response->body());
+                Log::warning('OpenAI meeting chat request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return [
+                    'content' => "Не удалось получить ответ от ИИ (ошибка провайдера: HTTP {$response->status()}" . ($errorText ? " — {$errorText}" : '') . ').',
+                ];
+            }
+
+            $json = $response->json();
+            $content = (string) ($json['choices'][0]['message']['content'] ?? '');
+            $usage = $json['usage'] ?? null;
+
+            if ($content === '') {
+                return [
+                    'content' => 'ИИ вернул пустой ответ.',
+                    'usage' => is_array($usage) ? $usage : null,
+                ];
+            }
+
+            return [
+                'content' => $content,
+                'usage' => is_array($usage) ? $usage : null,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('OpenAI meeting chat exception', [
+                'message' => $e->getMessage(),
+            ]);
+
+            return [
+                'content' => 'Не удалось получить ответ от ИИ (ошибка соединения).',
+            ];
+        }
+    }
+
+    /**
+     * Извлечь из стенограммы JSON-массив задач для создания в CRM.
+     *
+     * @return array{ok:bool, items?:array<int,array<string,mixed>>, error?:string}
+     */
+    public function extractMeetingTasksJson(string $transcript): array
+    {
+        $c = $this->resolveCredentials();
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
+
+        if ($apiKey === '') {
+            return ['ok' => false, 'error' => 'Не настроен API key ИИ.'];
+        }
+
+        $staff = User::query()->orderBy('name')->get(['id', 'name'])->map(fn (User $u) => [
+            'id' => $u->id,
+            'name' => $u->name,
+        ])->values()->all();
+
+        $staffJson = json_encode($staff, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        $user = "Справочник сотрудников (только эти id для responsible_user_id):\n{$staffJson}\n\nСтенограмма совещания:\n\n".$transcript;
+
+        $system = 'Ты извлекаешь итоговый список задач из стенограммы совещания. '
+            .'Верни ТОЛЬКО валидный JSON-массив без markdown и без текста до/после. Формат элемента: '
+            .'{"title":"строка","description":null или строка,"responsible_user_id":число или null,"due_date":"Y-m-d" или null,'
+            .'"status":"in_development"|"processing"|"execution"|"completed","client_id":число или null}. '
+            .'Если задач нет — верни [].';
+
+        try {
+            $response = Http::connectTimeout(15)
+                ->timeout(90)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->post("{$baseUrl}/chat/completions", [
+                    'model' => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $system],
+                        ['role' => 'user', 'content' => $user],
+                    ],
+                    'temperature' => 0.1,
+                    'max_tokens' => 4000,
+                ]);
+
+            if (! $response->successful()) {
+                return ['ok' => false, 'error' => 'ИИ недоступен (HTTP '.$response->status().').'];
+            }
+
+            $raw = (string) ($response->json('choices.0.message.content') ?? '');
+            $raw = $this->stripJsonFence($raw);
+            $decoded = json_decode($raw, true);
+            if (! is_array($decoded)) {
+                return ['ok' => false, 'error' => 'Не удалось разобрать JSON задач.'];
+            }
+
+            return ['ok' => true, 'items' => $decoded];
+        } catch (\Throwable $e) {
+            Log::error('extractMeetingTasksJson', ['message' => $e->getMessage()]);
+
+            return ['ok' => false, 'error' => 'Ошибка при обращении к ИИ.'];
+        }
+    }
+
+    private function stripJsonFence(string $raw): string
+    {
+        $raw = trim($raw);
+        if (preg_match('/^```(?:json)?\s*(.*?)\s*```$/s', $raw, $m)) {
+            return trim($m[1]);
+        }
+
+        return $raw;
     }
 
     private function formatContext(array $context): ?string

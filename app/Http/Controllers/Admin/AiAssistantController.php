@@ -11,13 +11,16 @@ use App\Models\Project;
 use App\Models\Setting;
 use App\Models\Task;
 use App\Models\TelegramGroupMessage;
+use App\Models\User;
 use App\Services\CrmDataSnapshotService;
+use App\Services\MeetingAiService;
 use App\Services\OpenAiChatService;
 use App\Services\TaskSituationReportService;
 use App\Services\TelegramService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 
@@ -175,17 +178,68 @@ class AiAssistantController extends Controller
             'client_id' => 'nullable|exists:clients,id',
             'project_id' => 'nullable|exists:projects,id',
             'task_id' => 'nullable|exists:tasks,id',
+            'kind' => 'nullable|in:general,meeting',
+            'meeting_at' => 'nullable|date',
         ]);
 
+        $kind = $validated['kind'] ?? 'general';
+        $meetingAt = ! empty($validated['meeting_at'])
+            ? Carbon::parse($validated['meeting_at'])
+            : Carbon::now();
+
+        $title = $validated['title'] ?? null;
+        if ($kind === 'meeting' && $title === null) {
+            $title = 'Совещание · '.$meetingAt->format('d.m.Y H:i');
+        }
+
         $conversation = AiConversation::create([
-            'title' => $validated['title'] ?? null,
+            'title' => $title,
             'created_by_user_id' => Auth::id(),
             'client_id' => $validated['client_id'] ?? null,
             'project_id' => $validated['project_id'] ?? null,
             'task_id' => $validated['task_id'] ?? null,
+            'kind' => $kind,
+            'meeting_at' => $kind === 'meeting' ? $meetingAt : null,
         ]);
 
-        return response()->json(['ok' => true, 'conversation' => $conversation]);
+        if ($kind === 'meeting') {
+            AiMessage::create([
+                'conversation_id' => $conversation->id,
+                'role' => AiMessage::ROLE_ASSISTANT,
+                'content' => MeetingAiService::welcomeMessage($meetingAt),
+            ]);
+        }
+
+        return response()->json(['ok' => true, 'conversation' => $conversation->fresh()]);
+    }
+
+    /**
+     * Подтверждение: создать задачи в CRM по стенограмме совещания (кнопка в интерфейсе).
+     */
+    public function applyMeetingTasks(Request $request, AiConversation $conversation, OpenAiChatService $chat): JsonResponse
+    {
+        $this->authorizeConversation($conversation);
+
+        if ($conversation->kind !== 'meeting') {
+            return response()->json(['ok' => false, 'message' => 'Это не диалог совещания.'], 422);
+        }
+
+        $fin = $this->finalizeMeetingTasks($conversation, $chat);
+
+        $assistantMessage = AiMessage::create([
+            'conversation_id' => $conversation->id,
+            'role' => AiMessage::ROLE_ASSISTANT,
+            'content' => $fin['assistant_content'],
+            'token_usage' => null,
+        ]);
+        $conversation->refresh()->touch();
+
+        return response()->json([
+            'ok' => true,
+            'assistant_message' => $assistantMessage,
+            'created_tasks' => $fin['created_tasks'],
+            'conversation' => $conversation->fresh(),
+        ]);
     }
 
     public function conversationsShow(AiConversation $conversation): JsonResponse
@@ -282,8 +336,32 @@ class AiAssistantController extends Controller
             ]);
         }
 
+        if ($conversation->kind === 'meeting'
+            && ! $conversation->meeting_finalized_at
+            && $this->isMeetingApplyPhrase($content)) {
+            $fin = $this->finalizeMeetingTasks($conversation->fresh(), $chat);
+            $assistantMessage = AiMessage::create([
+                'conversation_id' => $conversation->id,
+                'role' => AiMessage::ROLE_ASSISTANT,
+                'content' => $fin['assistant_content'],
+                'token_usage' => null,
+            ]);
+            $conversation->refresh()->touch();
+
+            return response()->json([
+                'ok' => true,
+                'user_message' => $userMessage,
+                'assistant_message' => $assistantMessage,
+                'created_tasks' => $fin['created_tasks'],
+            ]);
+        }
+
         $context = $this->buildContext($conversation);
-        $result = $chat->reply($conversation, $context);
+        if ($conversation->kind === 'meeting' && ! $conversation->meeting_finalized_at) {
+            $result = $chat->replyMeeting($conversation, $context);
+        } else {
+            $result = $chat->reply($conversation, $context);
+        }
 
         $assistantMessage = AiMessage::create([
             'conversation_id' => $conversation->id,
@@ -341,6 +419,151 @@ class AiAssistantController extends Controller
             'projects' => $projects,
             'tasks' => $tasks,
         ]);
+    }
+
+    /**
+     * @return array{assistant_content: string, created_tasks: array<int, array{id:int, title:string}>}
+     */
+    private function finalizeMeetingTasks(AiConversation $conversation, OpenAiChatService $chat): array
+    {
+        if ($conversation->meeting_finalized_at) {
+            return [
+                'assistant_content' => 'Задачи по этому совещанию уже внесены в CRM. Откройте новое совещение для нового протокола.',
+                'created_tasks' => [],
+            ];
+        }
+
+        $transcript = $this->buildMeetingTranscript($conversation);
+        $ex = $chat->extractMeetingTasksJson($transcript);
+
+        if (! $ex['ok']) {
+            return [
+                'assistant_content' => 'Не удалось подготовить задачи: '.($ex['error'] ?? 'ошибка ИИ').' Попробуйте ещё раз или сократите стенограмму.',
+                'created_tasks' => [],
+            ];
+        }
+
+        /** @var array<int, mixed> $items */
+        $items = $ex['items'] ?? [];
+        if (! is_array($items)) {
+            return [
+                'assistant_content' => 'ИИ вернул неожиданный формат. Напишите список задач короче и повторите подтверждение.',
+                'created_tasks' => [],
+            ];
+        }
+
+        $allowed = Task::statusesForBoard();
+        $createdTasks = [];
+        $projectId = $conversation->project_id;
+
+        foreach ($items as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $title = trim((string) ($row['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $title = mb_substr($title, 0, 255);
+
+            $status = (string) ($row['status'] ?? 'in_development');
+            if (! in_array($status, $allowed, true)) {
+                $status = Task::STATUS_IN_DEVELOPMENT;
+            }
+
+            $rid = isset($row['responsible_user_id']) ? (int) $row['responsible_user_id'] : null;
+            if ($rid && ! User::query()->whereKey($rid)->exists()) {
+                $rid = null;
+            }
+
+            $clientId = isset($row['client_id']) ? (int) $row['client_id'] : null;
+            if ($clientId && ! Client::query()->whereKey($clientId)->exists()) {
+                $clientId = null;
+            }
+
+            $due = null;
+            if (! empty($row['due_date'])) {
+                try {
+                    $due = Carbon::parse((string) $row['due_date'])->format('Y-m-d');
+                } catch (\Throwable) {
+                    $due = null;
+                }
+            }
+
+            $sortOrder = (int) Task::query()->where('status', $status)->max('sort_order') + 1;
+
+            $description = isset($row['description']) ? (string) $row['description'] : null;
+            if ($description !== null && $description === '') {
+                $description = null;
+            }
+
+            $task = Task::create([
+                'title' => $title,
+                'description' => $description,
+                'status' => $status,
+                'sort_order' => $sortOrder,
+                'show_on_board' => true,
+                'client_id' => $clientId,
+                'responsible_user_id' => $rid,
+                'project_id' => $projectId,
+                'due_date' => $due,
+            ]);
+
+            TelegramService::notifyTaskCreated($task);
+
+            $createdTasks[] = ['id' => $task->id, 'title' => $task->title];
+        }
+
+        if ($createdTasks === []) {
+            return [
+                'assistant_content' => 'Не удалось выделить ни одной задачи из стенограммы. Уточните формулировки в чате и снова нажмите «Создать задачи в CRM» или напишите «подтверждаю создание задач в CRM».',
+                'created_tasks' => [],
+            ];
+        }
+
+        $mt = $conversation->meeting_at ?? Carbon::now();
+        $conversation->meeting_finalized_at = Carbon::now();
+        $conversation->title = 'Совещание · '.$mt->format('d.m.Y H:i');
+        $conversation->save();
+
+        $lines = ['Созданы задачи в CRM:'];
+        foreach ($createdTasks as $t) {
+            $lines[] = '• #'.$t['id'].' '.$t['title'];
+        }
+        $lines[] = '';
+        $lines[] = 'Чат сохранён; заголовок диалога — дата и время совещания.';
+
+        return [
+            'assistant_content' => implode("\n", $lines),
+            'created_tasks' => $createdTasks,
+        ];
+    }
+
+    private function buildMeetingTranscript(AiConversation $conversation): string
+    {
+        $parts = [];
+        foreach ($conversation->messages()->orderBy('id')->get() as $m) {
+            if ($m->role === AiMessage::ROLE_SYSTEM) {
+                continue;
+            }
+            $who = $m->role === AiMessage::ROLE_USER ? 'Пользователь' : 'Ассистент';
+            $parts[] = $who.":\n".$m->content;
+        }
+
+        return implode("\n\n---\n\n", $parts);
+    }
+
+    private function isMeetingApplyPhrase(string $content): bool
+    {
+        $t = mb_strtolower(trim($content));
+        if (mb_strlen($t) > 120) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/подтверждаю\s+создание\s+задач\s+в\s+crm|создать\s+задачи\s+в\s+crm|внести\s+задачи\s+в\s+crm|зафиксировать\s+задачи/u',
+            $t
+        );
     }
 
     private function authorizeConversation(AiConversation $conversation): void

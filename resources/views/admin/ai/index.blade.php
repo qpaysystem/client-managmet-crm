@@ -78,18 +78,23 @@
         <div class="row g-3">
             <div class="col-lg-4">
                 <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <strong>Диалоги</strong>
-                        <button class="btn btn-sm btn-primary" id="btn-new-conv"><i class="bi bi-plus-lg"></i> Новый</button>
+                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                            <input type="datetime-local" class="form-control form-control-sm" id="meeting-at" title="Дата и время совещания (необязательно)" style="max-width: 11rem;">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-new-meeting" title="Режим совещания: повестка, вопросы, задачи в CRM"><i class="bi bi-people"></i> Совещание</button>
+                            <button class="btn btn-sm btn-primary" id="btn-new-conv"><i class="bi bi-plus-lg"></i> Новый</button>
+                        </div>
                     </div>
                     <div class="list-group list-group-flush" id="conv-list">
                         @forelse($conversations as $c)
                             <button type="button" class="list-group-item list-group-item-action conv-item"
                                     data-conv-id="{{ $c->id }}"
+                                    data-conv-kind="{{ $c->kind ?? 'general' }}"
                                     data-conv-title="{{ e($c->title ?? ('Диалог #' . $c->id)) }}">
-                                <div class="d-flex justify-content-between">
+                                <div class="d-flex justify-content-between align-items-center">
                                     <span class="text-truncate">{{ $c->title ?? ('Диалог #' . $c->id) }}</span>
-                                    <span class="text-muted small">#{{ $c->id }}</span>
+                                    <span class="text-muted small text-nowrap ms-1">#{{ $c->id }} @if(($c->kind ?? 'general') === 'meeting')<span class="badge bg-info">совещ.</span>@endif</span>
                                 </div>
                             </button>
                         @empty
@@ -132,6 +137,13 @@
                         <div class="text-muted">Выберите диалог слева или создайте новый.</div>
                     </div>
                     <div class="card-footer">
+                        <div id="meeting-apply-bar" class="alert alert-light border py-2 mb-2 d-none small">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <span>Когда список задач согласован, внесите его в CRM:</span>
+                                <button type="button" class="btn btn-sm btn-success" id="btn-meeting-apply" disabled>Создать задачи в CRM</button>
+                            </div>
+                            <div class="text-muted mt-1">Или напишите в чат: «подтверждаю создание задач в CRM».</div>
+                        </div>
                         <form id="chat-form" class="d-flex gap-2">
                             <input type="text" class="form-control" id="chat-input" placeholder="Сообщение..." maxlength="10000" autocomplete="off">
                             <button class="btn btn-primary" type="submit" id="chat-send" disabled>Отправить</button>
@@ -324,6 +336,10 @@
     const chatInput = document.getElementById('chat-input');
     const chatSend = document.getElementById('chat-send');
     const chatError = document.getElementById('chat-error');
+    const meetingApplyBar = document.getElementById('meeting-apply-bar');
+    const btnMeetingApply = document.getElementById('btn-meeting-apply');
+    const meetingAtEl = document.getElementById('meeting-at');
+    const btnNewMeeting = document.getElementById('btn-new-meeting');
 
     const ctxQ = document.getElementById('ctx-q');
     const ctxClient = document.getElementById('ctx-client');
@@ -331,6 +347,32 @@
     const ctxTask = document.getElementById('ctx-task');
 
     let currentConversationId = null;
+
+    function updateMeetingBar(conv) {
+        if (!meetingApplyBar || !btnMeetingApply) return;
+        if (conv && conv.kind === 'meeting' && !conv.meeting_finalized_at) {
+            meetingApplyBar.classList.remove('d-none');
+            btnMeetingApply.disabled = false;
+        } else {
+            meetingApplyBar.classList.add('d-none');
+            btnMeetingApply.disabled = true;
+        }
+    }
+
+    async function refreshConversationMeta() {
+        if (!currentConversationId) {
+            updateMeetingBar(null);
+            return;
+        }
+        try {
+            const url = `{{ route('admin.ai.conversations.show', ['conversation' => '__ID__']) }}`.replace('__ID__', currentConversationId);
+            const r = await fetch(url, { headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'} });
+            const data = await r.json();
+            if (r.ok && data.conversation) {
+                updateMeetingBar(data.conversation);
+            }
+        } catch (e) { /* ignore */ }
+    }
 
     function setChatError(msg) {
         chatError.textContent = msg || 'Ошибка';
@@ -381,6 +423,7 @@
                 chatMessages.innerHTML = '<div class="text-muted">Сообщений пока нет.</div>';
             }
             chatMessages.scrollTop = chatMessages.scrollHeight;
+            updateMeetingBar(data.conversation);
         } catch (e) {
             setChatError('Ошибка сети');
         }
@@ -407,6 +450,7 @@
                 },
                 body: JSON.stringify({
                     title: null,
+                    kind: 'general',
                     client_id: ctxClient.value || null,
                     project_id: ctxProject.value || null,
                     task_id: ctxTask.value || null,
@@ -421,6 +465,73 @@
             loadConversation(data.conversation.id);
         } catch (e) {
             setChatError('Ошибка сети');
+        }
+    });
+
+    btnNewMeeting && btnNewMeeting.addEventListener('click', async () => {
+        clearChatError();
+        try {
+            const payload = {
+                kind: 'meeting',
+                client_id: ctxClient.value || null,
+                project_id: ctxProject.value || null,
+                task_id: ctxTask.value || null,
+            };
+            if (meetingAtEl && meetingAtEl.value) {
+                payload.meeting_at = meetingAtEl.value;
+            }
+            const r = await fetch(`{{ route('admin.ai.conversations.store') }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                setChatError('Не удалось создать совещание');
+                return;
+            }
+            await reloadConversations();
+            loadConversation(data.conversation.id);
+        } catch (e) {
+            setChatError('Ошибка сети');
+        }
+    });
+
+    btnMeetingApply && btnMeetingApply.addEventListener('click', async () => {
+        if (!currentConversationId) return;
+        clearChatError();
+        btnMeetingApply.disabled = true;
+        try {
+            const url = `{{ route('admin.ai.conversations.apply-meeting-tasks', ['conversation' => '__ID__']) }}`.replace('__ID__', currentConversationId);
+            const r = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrf,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const data = await r.json();
+            if (!r.ok || !data.ok) {
+                setChatError(data.message || 'Не удалось создать задачи');
+                btnMeetingApply.disabled = false;
+                return;
+            }
+            if (data.assistant_message) {
+                chatMessages.appendChild(renderMessage('assistant', data.assistant_message.content || ''));
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            chatTitle.textContent = data.conversation && data.conversation.title ? data.conversation.title : chatTitle.textContent;
+            updateMeetingBar(data.conversation);
+            await reloadConversations();
+        } catch (e) {
+            setChatError('Ошибка сети');
+            btnMeetingApply.disabled = false;
         }
     });
 
@@ -465,6 +576,7 @@
             chatMessages.appendChild(renderMessage('assistant', data.assistant_message.content || ''));
             chatMessages.scrollTop = chatMessages.scrollHeight;
             await reloadConversations();
+            await refreshConversationMeta();
         } catch (e) {
             typing.remove();
             setChatError('Ошибка сети');
@@ -484,11 +596,13 @@
             btn.type = 'button';
             btn.className = 'list-group-item list-group-item-action conv-item';
             btn.dataset.convId = c.id;
+            btn.dataset.convKind = c.kind || 'general';
             btn.dataset.convTitle = c.title || ('Диалог #' + c.id);
+            const badge = (c.kind === 'meeting') ? '<span class="badge bg-info ms-1">совещ.</span>' : '';
             btn.innerHTML = `
-                <div class="d-flex justify-content-between">
+                <div class="d-flex justify-content-between align-items-center">
                     <span class="text-truncate">${escapeHtml(btn.dataset.convTitle)}</span>
-                    <span class="text-muted small">#${c.id}</span>
+                    <span class="text-muted small text-nowrap ms-1">#${c.id} ${badge}</span>
                 </div>
             `;
             list.appendChild(btn);
