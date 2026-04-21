@@ -183,6 +183,12 @@ SYS;
             'attachment_text_len' => $attachmentText ? mb_strlen($attachmentText) : 0,
         ]);
 
+        $fallbackEventForDocument = false;
+        if ($this->messageType === 'document' && $attachmentText) {
+            // Если документ пришёл без "важности" по мнению модели — всё равно фиксируем событие, чтобы не терять документы.
+            $fallbackEventForDocument = true;
+        }
+
         $context = [
             'project' => ['id' => $project->id, 'name' => $project->name],
             'open_tasks' => $openTasks,
@@ -242,6 +248,20 @@ SYS;
 
             if (! is_array($decoded)) {
                 Log::warning('telegram_elite_ai_bad_json', ['content' => mb_substr($content, 0, 400)]);
+                if ($fallbackEventForDocument) {
+                    $summary = trim(preg_replace('/\s+/u', ' ', $attachmentText));
+                    if (mb_strlen($summary) > 600) {
+                        $summary = mb_substr($summary, 0, 600) . '…';
+                    }
+                    AiCompanyEvent::create([
+                        'description' => 'Проект «' . $project->name . '»: Получен документ'
+                            . ($this->fileName ? ' ' . $this->fileName : '')
+                            . '. ' . ($summary !== '' ? ('Кратко: ' . $summary) : 'Текст не извлечён.'),
+                        'created_by_user_id' => null,
+                    ]);
+                    Cache::put('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId, 1, now()->addDays(7));
+                }
+
                 return;
             }
 
@@ -252,6 +272,19 @@ SYS;
                 'tasks_n' => is_array($decoded['tasks_to_create'] ?? null) ? count($decoded['tasks_to_create']) : null,
             ]);
             if (! $important) {
+                if ($fallbackEventForDocument) {
+                    $summary = trim(preg_replace('/\s+/u', ' ', $attachmentText));
+                    if (mb_strlen($summary) > 600) {
+                        $summary = mb_substr($summary, 0, 600) . '…';
+                    }
+                    AiCompanyEvent::create([
+                        'description' => 'Проект «' . $project->name . '»: Получен документ'
+                            . ($this->fileName ? ' ' . $this->fileName : '')
+                            . '. ' . ($summary !== '' ? ('Кратко: ' . $summary) : 'Текст не извлечён.'),
+                        'created_by_user_id' => null,
+                    ]);
+                }
+
                 Cache::put('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId, 1, now()->addDays(7));
                 return;
             }
