@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\TelegramGroupMessage;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
 class TelegramService
 {
@@ -404,5 +405,71 @@ class TelegramService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         return $httpCode === 200;
+    }
+
+    /**
+     * Скачивает документ из Telegram и возвращает извлечённый текст, если это простой текстовый формат.
+     * Для PDF/DOCX/картинок вернёт null (нужны отдельные парсеры/vision-модель).
+     */
+    public static function downloadTelegramFileText(string $fileId, ?string $fileName, ?string $mimeType): ?string
+    {
+        $token = (string) Setting::get('telegram_bot_token', '');
+        if ($token === '') {
+            return null;
+        }
+
+        $mimeType = $mimeType ? strtolower(trim($mimeType)) : null;
+        $fileNameLower = $fileName ? strtolower($fileName) : '';
+
+        $looksText = ($mimeType && str_contains($mimeType, 'text/'))
+            || preg_match('/\.(txt|csv|log|json|xml|md)$/', $fileNameLower);
+        if (! $looksText) {
+            return null;
+        }
+
+        try {
+            $base = 'https://api.telegram.org/bot'.$token;
+            $resp = Http::connectTimeout(10)
+                ->timeout(20)
+                ->acceptJson()
+                ->get($base.'/getFile', ['file_id' => $fileId]);
+
+            if (! $resp->successful()) {
+                return null;
+            }
+            $j = $resp->json();
+            $path = is_array($j) ? (string) ($j['result']['file_path'] ?? '') : '';
+            if ($path === '') {
+                return null;
+            }
+
+            $fileUrl = 'https://api.telegram.org/file/bot'.$token.'/'.$path;
+            $fileResp = Http::connectTimeout(10)
+                ->timeout(30)
+                ->get($fileUrl);
+            if (! $fileResp->successful()) {
+                return null;
+            }
+
+            $raw = (string) $fileResp->body();
+            if ($raw === '') {
+                return null;
+            }
+
+            // Safety: limit size to avoid huge prompts
+            if (strlen($raw) > 200_000) {
+                $raw = substr($raw, 0, 200_000);
+            }
+
+            // Best-effort: assume UTF-8, fallback conversion if needed
+            if (! mb_check_encoding($raw, 'UTF-8')) {
+                $raw = mb_convert_encoding($raw, 'UTF-8');
+            }
+
+            return trim($raw);
+        } catch (\Throwable $e) {
+            Log::warning('telegram_file_download_failed', ['e' => $e->getMessage()]);
+            return null;
+        }
     }
 }

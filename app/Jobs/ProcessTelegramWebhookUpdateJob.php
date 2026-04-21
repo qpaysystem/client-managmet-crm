@@ -96,6 +96,34 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         $text = isset($message['text']) ? (string) $message['text'] : null;
         $date = isset($message['date']) ? (int) $message['date'] : null;
 
+        // Attachments
+        $caption = isset($message['caption']) ? (string) $message['caption'] : null;
+        $messageType = null;
+        $fileId = null;
+        $fileUniqueId = null;
+        $fileName = null;
+        $mimeType = null;
+        $fileSize = null;
+
+        if (isset($message['document']) && is_array($message['document'])) {
+            $doc = $message['document'];
+            $messageType = 'document';
+            $fileId = isset($doc['file_id']) ? (string) $doc['file_id'] : null;
+            $fileUniqueId = isset($doc['file_unique_id']) ? (string) $doc['file_unique_id'] : null;
+            $fileName = isset($doc['file_name']) ? (string) $doc['file_name'] : null;
+            $mimeType = isset($doc['mime_type']) ? (string) $doc['mime_type'] : null;
+            $fileSize = isset($doc['file_size']) ? (int) $doc['file_size'] : null;
+        } elseif (isset($message['photo']) && is_array($message['photo']) && $message['photo'] !== []) {
+            $messageType = 'photo';
+            // take the biggest photo size
+            $photo = end($message['photo']);
+            if (is_array($photo)) {
+                $fileId = isset($photo['file_id']) ? (string) $photo['file_id'] : null;
+                $fileUniqueId = isset($photo['file_unique_id']) ? (string) $photo['file_unique_id'] : null;
+                $fileSize = isset($photo['file_size']) ? (int) $photo['file_size'] : null;
+            }
+        }
+
         try {
             TelegramGroupMessage::query()->firstOrCreate(
                 [
@@ -103,10 +131,17 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
                     'message_id' => $messageId,
                 ],
                 [
+                    'message_type' => $messageType,
                     'from_user_id' => isset($from['id']) ? (int) $from['id'] : null,
                     'from_username' => isset($from['username']) ? (string) $from['username'] : null,
                     'from_first_name' => isset($from['first_name']) ? (string) $from['first_name'] : null,
                     'text' => $text,
+                    'caption' => $caption,
+                    'file_id' => $fileId,
+                    'file_unique_id' => $fileUniqueId,
+                    'file_name' => $fileName,
+                    'mime_type' => $mimeType,
+                    'file_size' => $fileSize,
                     'message_date' => $date ? now()->setTimestamp($date) : null,
                 ]
             );
@@ -114,8 +149,12 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             Log::warning('telegram_group_message_store', ['e' => $e->getMessage()]);
         }
 
-        if ($text === null || $text === '') {
-            return;
+        $analysisText = trim((string) ($text ?? ''));
+        if ($analysisText === '') {
+            $analysisText = trim((string) ($caption ?? ''));
+        }
+        if ($analysisText === '' && $fileName) {
+            $analysisText = 'Файл: ' . $fileName;
         }
 
         $configuredNotificationsChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
@@ -128,11 +167,15 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
                 $when = $date ? Carbon::createFromTimestamp($date) : now();
 
                 ProcessTelegramEliteProjectAiJob::dispatch(
-                    $text,
+                    $analysisText,
                     $incomingChatId,
                     $messageId,
                     $fromName,
-                    $when->format('Y-m-d H:i:s')
+                    $when->format('Y-m-d H:i:s'),
+                    $messageType,
+                    $fileId,
+                    $fileName,
+                    $mimeType
                 )->onConnection('database');
             }
 
@@ -141,6 +184,10 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
 
         // Ниже — поведение «основной» группы уведомлений/вопросов по CRM.
         if ($configuredNotificationsChatId === '' || $incomingChatId !== $configuredNotificationsChatId) {
+            return;
+        }
+
+        if ($analysisText === '') {
             return;
         }
 
@@ -188,7 +235,7 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         }
 
         if (Setting::get('telegram_group_ai_crm', '1') === '1') {
-            $crmQuestion = TelegramGroupAssistantService::extractCrmAiQuestion($text);
+            $crmQuestion = TelegramGroupAssistantService::extractCrmAiQuestion($analysisText);
             if ($crmQuestion !== null && $crmQuestion !== '') {
                 if ($token) {
                     if (! Cache::add('telegram_crm_ai_queued_'.$incomingChatId.'_'.$messageId, 1, 86400)) {
@@ -210,7 +257,7 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             return;
         }
 
-        if (! TelegramGroupAssistantService::isHelpCurrentInfoRequest($text)) {
+        if (! TelegramGroupAssistantService::isHelpCurrentInfoRequest($analysisText)) {
             return;
         }
 

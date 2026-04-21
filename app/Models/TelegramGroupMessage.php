@@ -11,15 +11,23 @@ class TelegramGroupMessage extends Model
     protected $fillable = [
         'chat_id',
         'message_id',
+        'message_type',
         'from_user_id',
         'from_username',
         'from_first_name',
         'text',
+        'caption',
+        'file_id',
+        'file_unique_id',
+        'file_name',
+        'mime_type',
+        'file_size',
         'message_date',
     ];
 
     protected $casts = [
         'message_date' => 'datetime',
+        'file_size' => 'integer',
     ];
 
     /**

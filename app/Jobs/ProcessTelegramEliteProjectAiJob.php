@@ -39,7 +39,11 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
         public int $messageId,
         public string $fromName,
         /** ISO-ish datetime string (server-local) */
-        public string $messageDate
+        public string $messageDate,
+        public ?string $messageType = null,
+        public ?string $fileId = null,
+        public ?string $fileName = null,
+        public ?string $mimeType = null
     ) {}
 
     public function handle(): void
@@ -129,6 +133,7 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
 - Если в сообщении содержится явное поручение или работа, которую нужно сделать — создай задачи (tasks_to_create).
 - Не выдумывай детали. Если срок не указан — due_date=null.
 - Всегда возвращай только валидный JSON без markdown и без пояснений.
+ - Если приложен документ с извлечённым текстом — учитывай его как продолжение сообщения.
 
 Формат ответа (JSON):
 {
@@ -140,6 +145,11 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
 }
 SYS;
 
+        $attachmentText = null;
+        if ($this->messageType === 'document' && $this->fileId) {
+            $attachmentText = TelegramService::downloadTelegramFileText($this->fileId, $this->fileName, $this->mimeType);
+        }
+
         $context = [
             'project' => ['id' => $project->id, 'name' => $project->name],
             'open_tasks' => $openTasks,
@@ -149,6 +159,12 @@ SYS;
                 'from' => $this->fromName,
                 'at' => $this->messageDate,
                 'text' => $this->text,
+                'attachment' => [
+                    'type' => $this->messageType,
+                    'file_name' => $this->fileName,
+                    'mime_type' => $this->mimeType,
+                    'extracted_text' => $attachmentText ? mb_substr($attachmentText, 0, 12000) : null,
+                ],
             ],
         ];
 
