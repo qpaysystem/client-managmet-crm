@@ -55,16 +55,15 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
             @if(session('mail_test_success'))
                 <div class="alert alert-success small">{{ session('mail_test_success') }}</div>
             @endif
-            <form method="post" action="{{ route('admin.settings.mail-test') }}" class="row g-2 align-items-end">
-                @csrf
+            <div class="row g-2 align-items-end">
                 <div class="col-md-8">
                     <label class="form-label small mb-1">Отправить тестовое письмо на адрес</label>
-                    <input type="email" name="test_email" class="form-control" value="{{ old('test_email', auth()->user()->email ?? '') }}" placeholder="email@example.com" required maxlength="255">
+                    <input type="email" name="test_email" form="mailTestForm" class="form-control" value="{{ old('test_email', auth()->user()->email ?? '') }}" placeholder="email@example.com" required maxlength="255">
                 </div>
                 <div class="col-md-4">
-                    <button type="submit" class="btn btn-outline-primary w-100">Проверить отправку</button>
+                    <button type="submit" form="mailTestForm" class="btn btn-outline-primary w-100">Проверить отправку</button>
                 </div>
-            </form>
+            </div>
         </div>
     </div>
 
@@ -188,5 +187,9 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
         </div>
     </div>
     <button type="submit" class="btn btn-primary">Сохранить настройки</button>
+</form>
+
+<form id="mailTestForm" method="post" action="{{ route('admin.settings.mail-test') }}" class="d-none">
+    @csrf
 </form>
 @endsection
