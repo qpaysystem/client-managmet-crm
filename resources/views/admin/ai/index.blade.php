@@ -207,9 +207,17 @@
                     <strong>Сообщения группы</strong>
                     <span class="text-muted small ms-2">дубль переписки из БД (webhook)</span>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-tg-refresh" title="Обновить">
-                    <i class="bi bi-arrow-clockwise"></i> Обновить
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" id="tg-chat-select" style="max-width: 320px;">
+                        <option value="{{ $telegramChatId ?? '' }}">Основная группа</option>
+                        @if(($telegramEliteChatId ?? '') !== '')
+                            <option value="{{ $telegramEliteChatId }}">Элитный (управление проектом)</option>
+                        @endif
+                    </select>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn-tg-refresh" title="Обновить">
+                        <i class="bi bi-arrow-clockwise"></i> Обновить
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <p class="text-muted small mb-2" id="tg-meta-hint">
@@ -870,6 +878,7 @@
     const tgMetaHint = document.getElementById('tg-meta-hint');
     const btnTgRefresh = document.getElementById('btn-tg-refresh');
     const tabTelegram = document.getElementById('tab-telegram');
+    const tgChatSelect = document.getElementById('tg-chat-select');
 
     async function loadTelegramMessages() {
         if (!tgChat) return;
@@ -877,6 +886,9 @@
         try {
             const url = new URL(`{{ route('admin.ai.telegram-messages') }}`, window.location.origin);
             url.searchParams.set('limit', '400');
+            if (tgChatSelect && tgChatSelect.value) {
+                url.searchParams.set('chat_id', tgChatSelect.value);
+            }
             const r = await fetch(url.toString(), {
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -922,6 +934,9 @@
 
     if (btnTgRefresh) {
         btnTgRefresh.addEventListener('click', () => loadTelegramMessages());
+    }
+    if (tgChatSelect) {
+        tgChatSelect.addEventListener('change', () => loadTelegramMessages());
     }
     if (tabTelegram) {
         tabTelegram.addEventListener('shown.bs.tab', () => loadTelegramMessages());

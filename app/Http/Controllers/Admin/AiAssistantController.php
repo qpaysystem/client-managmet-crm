@@ -43,10 +43,11 @@ class AiAssistantController extends Controller
             ->get();
 
         $telegramChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
+        $telegramEliteChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_elite_chat_id', ''));
 
         $companyEvents = AiCompanyEvent::query()->orderByDesc('id')->limit(300)->get();
 
-        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId', 'companyEvents'));
+        return view('admin.ai.index', compact('prompts', 'activePrompt', 'conversations', 'telegramChatId', 'telegramEliteChatId', 'companyEvents'));
     }
 
     public function companyEventsIndex(): JsonResponse
@@ -100,10 +101,19 @@ class AiAssistantController extends Controller
     {
         $request->validate([
             'limit' => 'nullable|integer|min:1|max:500',
+            'chat_id' => 'nullable|string|max:50',
         ]);
         $limit = (int) $request->input('limit', 400);
 
-        $chatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
+        $defaultChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
+        $requestedChatId = TelegramService::normalizeChatIdForStorage((string) $request->input('chat_id', ''));
+        $allowed = TelegramService::configuredGroupChatIds();
+
+        $chatId = $defaultChatId;
+        if ($requestedChatId !== '' && in_array($requestedChatId, $allowed, true)) {
+            $chatId = $requestedChatId;
+        }
+
         if ($chatId === '') {
             return response()->json([
                 'ok' => true,
