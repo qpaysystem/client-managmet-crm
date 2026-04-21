@@ -1,0 +1,70 @@
+---
+description: Домашний сервер (Proxmox) — контекст инфраструктуры, VM-архитектура, storage/backup; применять при работе с infra/*
+globs: "{infra/**,**/infra/**}"
+alwaysApply: false
+---
+
+# Домашний сервер — инфраструктурный контекст (Proxmox)
+
+Это правило включается, когда в проекте открыты файлы под `infra/**`. Используй его как “память” о целевой архитектуре домашнего/рабочего сервера на Proxmox и как набор инженерных ограничений.
+
+## Цель
+
+Спроектировать и вести в git инфраструктуру “домашний сервер” (Proxmox) как код/документацию:
+
+- Proxmox host как гипервизор (без прикладных сервисов).
+- Ubuntu VM для **AI-core** (OpenClaw, Docker, автоматизации, интеграции).
+- Ubuntu VM для **web-host** (reverse proxy, docker compose проекты, staging/prod).
+- Windows VM для **1С/Windows-only** софта (RDP).
+- Storage layer (общие файлы/медиа/документы/проекты).
+- Backup layer (backup storage, политика, сценарии восстановления).
+
+## Принципы изоляции (важно)
+
+- **Не ставить прикладные сервисы на Proxmox host** (всё прикладное — в VM/LXC).
+- **Web-host публикуется наружу** только через reverse proxy; БД/админки — не наружу.
+- **AI-core имеет ограниченный доступ к данным**: только нужные каталоги, лучше read-only где возможно.
+- **Windows VM не является файловым ядром**: не хранить там “истину” по документам/проектам/бэкапам.
+- **Секреты не коммитить**: пароли, токены, приватные ключи, VPN-конфиги, cloud credentials.
+
+## Нейминг (единый стиль)
+
+Используй понятные имена VM и ресурсов (пример):
+
+- `pve-hv-01` — Proxmox host (имя узла)
+- `vm-ai-core-01` — Ubuntu AI-core
+- `vm-web-host-01` — Ubuntu web hosting
+- `vm-win-work-01` — Windows (1C/work)
+- `st-local` / `st-local-lvm` — proxmox storage (как в PVE по умолчанию)
+- `st-data-*` — отдельные data storage (если появятся)
+- `bk-*` — backup storage/политики/задания
+
+## Репозиторий инфраструктуры (ожидаемая структура)
+
+Ожидаемый корень: `infra/`
+
+- `infra/docs/` — документы: архитектура, план VM, storage/backup планы, чеклисты
+- `infra/proxmox/` — конфиги Proxmox: storage/network notes, команды `qm`, шаблоны
+- `infra/ai-core/` — Docker/Compose стеки AI-core, манифесты, systemd units (без секретов)
+- `infra/web-host/` — reverse proxy + compose stacks (staging/prod), env templates
+- `infra/windows-vm/` — заметки по Windows VM, RDP, лицензированию, интеграциям
+- `infra/storage/` — структура каталогов, ACL, mount points, SMB/NFS, политики доступа
+- `infra/backup/` — политика бэкапов, расписание, restore runbooks
+- `infra/scripts/` — idempotent скрипты (setup/check/backup/health), без секретов
+
+## OpenClaw — правила размещения и прав
+
+- **Живёт**: в `vm-ai-core-01` (Ubuntu) как сервис в Docker/Compose (или systemd+venv, если так требует проект).
+- **Доступ к файлам**: только к выделенным mount points (например `~/data/inbox`, `~/data/projects`), по возможности read-only.
+- **Доступ к API**: только к явно разрешённым (список в `infra/docs/openclaw-plan.md`).
+- **Запрещено**:
+  - доступ к Proxmox host (SSH/апи) без отдельной необходимости
+  - доступ к Docker socket web-host’а и к prod secrets
+  - доступ “ко всему шару” storage (root of storage, бэкапы, приватные документы)
+
+## Практический фокус при изменениях
+
+- Держать документы и конфиги **применимыми**: команды, пути, имена VM/storage без “воды”.
+- Всё, что зависит от окружения, вести как шаблоны: `*.env.example`, `secrets.example.yaml`, `.gitignore` для реальных секретов.
+- Для шагов деплоя — чеклист `infra/docs/deployment-checklist.md` с критерием готовности.
+

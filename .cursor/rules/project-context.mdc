@@ -1,30 +1,46 @@
 ---
-description: Контекст проекта CRM — стек, фичи, деплой, хостинг
+description: Контекст CRM — стек, фичи, ИИ/Telegram, деплой; всегда для новых диалогов
 alwaysApply: true
 ---
 
-# client-management-crm — контекст проекта
+# client-management-crm — контекст разработки
 
-## Что это
-Laravel 10 CRM: управление клиентами, балансы, транзакции, проекты, квартиры, задачи, личный кабинет клиента, лендинг компании «Периметр Элитного Капитала».
+## Продукт
+Laravel 10 CRM: клиенты, балансы, транзакции, проекты, квартиры, задачи, этапы строительства, личный кабинет (`/cabinet`), лендинг «Периметр Элитного Капитала», админка `/admin`.
 
 ## Стек
-- PHP 8.1+, Laravel 10, MySQL
-- Blade, Bootstrap 5, Bootstrap Icons
-- Личный кабинет: сессии по client_id, маршруты под префиксом /cabinet
-- Админка: /admin, middleware auth
+PHP 8.1+, Laravel 10, MySQL. Blade + Bootstrap 5. Очередь: `QUEUE_CONNECTION=database`, cron `schedule:run` каждую минуту (на Timeweb — панель → cron → файл `cron-schedule.php` в корне проекта или `php artisan schedule:run`).
 
-## Реализованные фичи (чтобы не дублировать и не ломать)
-- **Задачи**: у задачи есть project_id и budget; в карточке проекта (ЛК) — вкладка «Задачи» со списком задач по проекту. Модели Task, Project — связь project()->tasks().
-- **Лендинг**: без логотипов в шапке и в герое; сразу баннер (hero-banner.png), потом «Описание компании». Изображения: public/images/hero-banner.png, logo.png. Маршруты в web.php отдают /images/logo.png, /images/hero-banner.png через Laravel (если хостинг не отдаёт статику).
-- **PWA для кабинета**: manifest.json, sw.js, иконки pwa-icon-192/512 (генерируются через PwaIconGenerator из logo.png или создаются по первому запросу). Маршруты для manifest.json, sw.js, иконок в web.php.
-- **Push-уведомления**: при проведении транзакции в админке (ClientController) отправляется push клиенту. Подписка: POST /cabinet/push-subscribe, таблица push_subscriptions. VAPID в config/services.php и .env (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY). Команда php artisan pwa:vapid. Пакет minishlink/web-push.
+## Фичи (не ломать / не дублировать с нуля)
+- **Задачи**: `Task` — `project_id`, `responsible_user_id`, `due_date`, статусы доски; `Project::tasks()`.
+- **Лендинг**: hero `public/images/hero-banner.png`; без лишних логотипов в шапке по правилам проекта; при необходимости раздача картинок через `web.php`.
+- **PWA кабинета**: manifest, sw, иконки; VAPID push при транзакциях (`minishlink/web-push`, `ClientController`, `/cabinet/push-subscribe`).
+- **ИИ-помощник** (`/admin/ai`): промпты `AiPrompt`, чат `AiConversation` / `AiMessage`, `OpenAiChatService` (DeepSeek/OpenAI из настроек), опционально снимок CRM `CrmDataSnapshotService`, кеш `crm_ai_snapshot_v2`.
+- **Совещание**: `kind=meeting` на `ai_conversations`, `MeetingAiService`, `replyMeeting`, финализация задач `apply-meeting-tasks`, извлечение JSON задач.
+- **События компании**: модель `AiCompanyEvent`, таблица `ai_company_events`, контекст `company_events` в `buildContext` (ИИ + совещания).
+- **Telegram**: бот, группа, `TelegramService`, long poll `TelegramLongPollCommand` (`telegram:poll`, не одновременно с webhook), джобы `ProcessTelegramWebhookUpdateJob`, `ProcessTelegramGroupAiJob`, `ProcessTelegramCrmAiJob`, почасовой тезис `TelegramSendHourlyConstructionThesisCommand`.
+- **Почта**: `config/mail.php`, SMTP (в т.ч. Яндекс) через `.env` `MAIL_*`; тест в настройках админки `settings/mail-test`.
 
-## Хостинг и деплой
-- Корень сайта на хостинге часто public_html (аналог Laravel public/). Статика и маршруты в web.php отдают файлы, если сервер отдаёт всё в index.php.
-- Composer на хостинге может быть старый: использовать локальный composer.phar в проекте (curl -sS https://getcomposer.org/installer | php, затем php composer.phar install --no-dev).
-- После заливки файлов: php artisan migrate --force, при необходимости php artisan config:clear, php artisan view:clear.
+## Конфиг и секреты
+- `config/services.php` — vapid, openai/deepseek, crm_snapshot_*, telegram cooldown.
+- Ключи API только в `.env` / настройках БД (`Setting`), не коммитить.
 
-## Важные пути
-- Роуты: routes/web.php. Контроллеры: app/Http/Controllers/Cabinet/CabinetController.php, Admin/ClientController.php, Admin/TaskController.php.
-- Шаблоны кабинета: resources/views/cabinet/, лендинг: resources/views/landing/. Конфиг: config/services.php (jitsi, vapid).
+## Деплой
+`deploy.sh`: git pull, composer, clear caches, migrate, config/route/view cache. После изменений `.env`: `php artisan config:clear` или `config:cache`.
+
+## Где смотреть код
+| Область | Путь |
+|--------|------|
+| Роуты | `routes/web.php` |
+| Админ CRM | `app/Http/Controllers/Admin/` |
+| Кабинет | `app/Http/Controllers/Cabinet/CabinetController.php` |
+| ИИ | `AiAssistantController`, `OpenAiChatService`, `CrmDataSnapshotService`, `MeetingAiService` |
+| Telegram | `TelegramService`, `app/Jobs/ProcessTelegram*`, `TelegramLongPollCommand` |
+| Настройки UI | `SettingController`, `resources/views/admin/settings/` |
+| Планировщик | `app/Console/Kernel.php`, корень `cron-schedule.php` |
+
+## Новый чат в Cursor
+Это правило подхватывается автоматически (`alwaysApply: true`). История прошлых диалогов недоступна — при ссылке на конкретный код или баг прикрепляйте файлы через `@` или цитируйте путь; не предполагайте незакоммиченное состояние репозитория без явного указания.
+
+## Принципы правок
+Менять только то, что нужно задаче; не раздувать дифф; не удалять чужие комментарии без причины; стиль как в соседнем коде.

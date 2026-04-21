@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 
 class SettingController extends Controller
@@ -116,5 +117,35 @@ class SettingController extends Controller
         Setting::set('openai_base_url', $request->get('openai_base_url', ''));
 
         return back()->with('success', 'Настройки сохранены.');
+    }
+
+    /**
+     * Проверка SMTP (Яндекс и др.): письмо из .env MAIL_*.
+     */
+    public function mailTest(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'test_email' => 'required|email|max:255',
+        ]);
+
+        $to = $validated['test_email'];
+
+        try {
+            Mail::raw(
+                "Проверка почты из CRM «".config('app.name', 'CRM')."».\n\n"
+                .'Время сервера: '.now()->format('Y-m-d H:i:s')."\n"
+                .'Если письмо не видно — проверьте папку «Спам».',
+                function ($message) use ($to) {
+                    $message->to($to)
+                        ->subject(config('app.name', 'CRM').': тест почты');
+                }
+            );
+        } catch (\Throwable $e) {
+            return back()
+                ->withInput()
+                ->withErrors(['mail_test' => 'Не удалось отправить: '.$e->getMessage()]);
+        }
+
+        return back()->with('mail_test_success', 'Тестовое письмо отправлено на '.$to.'. Проверьте входящие и спам.');
     }
 }

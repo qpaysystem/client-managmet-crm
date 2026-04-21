@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\AiAssistantController;
+use App\Http\Controllers\Admin\PaymentInvoiceController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Frontend\ClientController as FrontendClientController;
 use App\Http\Controllers\Frontend\TaskController as FrontendTaskController;
@@ -186,6 +187,9 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
 
     Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
     Route::post('settings', [SettingController::class, 'store'])->name('settings.store');
+    Route::post('settings/mail-test', [SettingController::class, 'mailTest'])->name('settings.mail-test');
+
+    Route::resource('payment-invoices', PaymentInvoiceController::class)->except(['show']);
 
     // AI assistant
     Route::get('ai', [AiAssistantController::class, 'index'])->name('ai.index');

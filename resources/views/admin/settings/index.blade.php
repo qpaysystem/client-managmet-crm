@@ -21,6 +21,53 @@
             </div>
         </div>
     </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">Почта (Яндекс / SMTP)</h5>
+            <p class="text-muted small mb-2">
+                Отправка писем из CRM идёт через SMTP. Для Яндекс Почты создайте <strong>пароль приложения</strong>
+                в настройках аккаунта Яндекс ID (безопасность) и пропишите параметры в файле <code>.env</code> на сервере, затем <code>php artisan config:clear</code>.
+            </p>
+            @if(config('mail.mailers.smtp.username'))
+                <p class="small text-success mb-2">
+                    SMTP: <code>{{ config('mail.mailers.smtp.host') }}</code>, порт {{ config('mail.mailers.smtp.port') }},
+                    пользователь: <code>{{ config('mail.mailers.smtp.username') }}</code>
+                </p>
+            @else
+                <p class="small text-warning mb-2">В <code>.env</code> не задан <code>MAIL_USERNAME</code> — отправка не настроена.</p>
+            @endif
+            <details class="mb-3">
+                <summary class="small text-muted" style="cursor:pointer;">Пример для Яндекс Почты</summary>
+                <pre class="small bg-light border rounded p-2 mt-2 mb-0">MAIL_MAILER=smtp
+MAIL_HOST=smtp.yandex.ru
+MAIL_PORT=465
+MAIL_USERNAME=ваш_ящик@yandex.ru
+MAIL_PASSWORD=пароль_приложения_из_Яндекс_ID
+MAIL_ENCRYPTION=ssl
+MAIL_FROM_ADDRESS="${MAIL_USERNAME}"
+MAIL_FROM_NAME="${APP_NAME}"</pre>
+                <p class="small text-muted mt-2 mb-0">Альтернатива: порт <code>587</code>, <code>MAIL_ENCRYPTION=tls</code>. Документация Яндекса: <a href="https://yandex.ru/support/mail/mail-clients/mail-clients.html" target="_blank" rel="noopener">настройка почтовых программ</a>.</p>
+            </details>
+            @if($errors->has('mail_test'))
+                <div class="alert alert-danger small">{{ $errors->first('mail_test') }}</div>
+            @endif
+            @if(session('mail_test_success'))
+                <div class="alert alert-success small">{{ session('mail_test_success') }}</div>
+            @endif
+            <form method="post" action="{{ route('admin.settings.mail-test') }}" class="row g-2 align-items-end">
+                @csrf
+                <div class="col-md-8">
+                    <label class="form-label small mb-1">Отправить тестовое письмо на адрес</label>
+                    <input type="email" name="test_email" class="form-control" value="{{ old('test_email', auth()->user()->email ?? '') }}" placeholder="email@example.com" required maxlength="255">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-outline-primary w-100">Проверить отправку</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Telegram-бот</h5>

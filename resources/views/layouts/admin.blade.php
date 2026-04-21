@@ -19,6 +19,7 @@
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.tasks.index') }}"><i class="bi bi-check2-square"></i> Задачи</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.products.index') }}"><i class="bi bi-box-seam"></i> ТМЦ</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.projects.index') }}"><i class="bi bi-folder2-open"></i> Проекты</a></li>
+            <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.payment-invoices.index') }}"><i class="bi bi-receipt"></i> Счета на оплату</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.custom-fields.index') }}"><i class="bi bi-list-ul"></i> Поля клиентов</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.users.index') }}"><i class="bi bi-person-gear"></i> Пользователи</a></li>
             <li class="nav-item"><a class="nav-link text-white" href="{{ route('admin.activity') }}"><i class="bi bi-activity"></i> Активность</a></li>
