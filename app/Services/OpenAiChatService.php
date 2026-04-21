@@ -487,6 +487,69 @@ class OpenAiChatService
     }
 
     /**
+     * Vision: краткое описание изображения (только OpenAI провайдер).
+     */
+    public function describeImageForEliteGroup(string $imageBytes, string $mimeType, string $hintText = ''): ?string
+    {
+        $c = $this->resolveCredentials();
+        if (($c['provider'] ?? '') !== 'openai') {
+            return null;
+        }
+        $apiKey = $c['apiKey'];
+        $model = $c['model'];
+        $baseUrl = $c['baseUrl'];
+        if ($apiKey === '' || $model === '' || $baseUrl === '') {
+            return null;
+        }
+
+        $b64 = base64_encode($imageBytes);
+        if ($b64 === '') {
+            return null;
+        }
+
+        $system = 'Ты — ассистент руководителя строительства. Опиши, что на фото, и выдели важные наблюдения: проблемы, риски, прогресс работ, материалы, дефекты. '
+            .'Пиши по-русски, кратко (до 10 пунктов). Если фото не относится к стройке/документам — так и скажи.';
+        $text = trim($hintText);
+        $userText = $text !== '' ? "Подпись/контекст: {$text}" : 'Опиши фото.';
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            [
+                'role' => 'user',
+                'content' => [
+                    ['type' => 'text', 'text' => $userText],
+                    ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$b64}"]],
+                ],
+            ],
+        ];
+
+        try {
+            $response = Http::connectTimeout(15)
+                ->timeout(120)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->post("{$baseUrl}/chat/completions", [
+                    'model' => $model,
+                    'messages' => $messages,
+                    'temperature' => 0.2,
+                    'max_tokens' => 800,
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('openai_vision_failed', ['status' => $response->status(), 'body' => mb_substr((string) $response->body(), 0, 400)]);
+                return null;
+            }
+
+            $json = $response->json();
+            $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+            return $content !== '' ? $content : null;
+        } catch (\Throwable $e) {
+            Log::warning('openai_vision_exception', ['e' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
      * Извлечь из стенограммы JSON-массив задач для создания в CRM.
      *
      * @return array{ok:bool, items?:array<int,array<string,mixed>>, error?:string}

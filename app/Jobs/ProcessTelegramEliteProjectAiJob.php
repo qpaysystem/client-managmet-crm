@@ -149,6 +149,16 @@ SYS;
         if ($this->messageType === 'document' && $this->fileId) {
             $attachmentText = TelegramService::downloadTelegramFileText($this->fileId, $this->fileName, $this->mimeType);
         }
+        if ($this->messageType === 'photo' && $this->fileId) {
+            $bytes = TelegramService::downloadTelegramFileBytes($this->fileId, 1_800_000);
+            if ($bytes) {
+                $mime = $this->mimeType ?: 'image/jpeg';
+                $vision = app(OpenAiChatService::class)->describeImageForEliteGroup($bytes, $mime, $this->text);
+                if ($vision) {
+                    $attachmentText = $vision;
+                }
+            }
+        }
 
         $context = [
             'project' => ['id' => $project->id, 'name' => $project->name],

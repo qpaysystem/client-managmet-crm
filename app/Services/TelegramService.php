@@ -10,6 +10,7 @@ use App\Models\TelegramGroupMessage;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Smalot\PdfParser\Parser as PdfParser;
 
 class TelegramService
 {
@@ -421,9 +422,52 @@ class TelegramService
         $mimeType = $mimeType ? strtolower(trim($mimeType)) : null;
         $fileNameLower = $fileName ? strtolower($fileName) : '';
 
+        $looksPdf = ($mimeType === 'application/pdf') || str_ends_with($fileNameLower, '.pdf');
         $looksText = ($mimeType && str_contains($mimeType, 'text/'))
             || preg_match('/\.(txt|csv|log|json|xml|md)$/', $fileNameLower);
-        if (! $looksText) {
+        if (! $looksText && ! $looksPdf) {
+            return null;
+        }
+
+        try {
+            $raw = self::downloadTelegramFileBytes($fileId, 2_500_000);
+            if ($raw === null || $raw === '') {
+                return null;
+            }
+
+            if ($looksPdf) {
+                $parser = new PdfParser();
+                $pdf = $parser->parseContent($raw);
+                $text = trim((string) $pdf->getText());
+                if ($text === '') {
+                    return null;
+                }
+                if (mb_strlen($text) > 12000) {
+                    $text = mb_substr($text, 0, 12000) . "\n…(обрезано)";
+                }
+
+                return $text;
+            }
+
+            // Text-like file
+            if (strlen($raw) > 200_000) {
+                $raw = substr($raw, 0, 200_000);
+            }
+            if (! mb_check_encoding($raw, 'UTF-8')) {
+                $raw = mb_convert_encoding($raw, 'UTF-8');
+            }
+
+            return trim($raw);
+        } catch (\Throwable $e) {
+            Log::warning('telegram_file_download_failed', ['e' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    public static function downloadTelegramFileBytes(string $fileId, int $maxBytes = 2_500_000): ?string
+    {
+        $token = (string) Setting::get('telegram_bot_token', '');
+        if ($token === '') {
             return null;
         }
 
@@ -445,28 +489,21 @@ class TelegramService
 
             $fileUrl = 'https://api.telegram.org/file/bot'.$token.'/'.$path;
             $fileResp = Http::connectTimeout(10)
-                ->timeout(30)
+                ->timeout(40)
                 ->get($fileUrl);
             if (! $fileResp->successful()) {
                 return null;
             }
-
             $raw = (string) $fileResp->body();
             if ($raw === '') {
                 return null;
             }
 
-            // Safety: limit size to avoid huge prompts
-            if (strlen($raw) > 200_000) {
-                $raw = substr($raw, 0, 200_000);
+            if (strlen($raw) > $maxBytes) {
+                $raw = substr($raw, 0, $maxBytes);
             }
 
-            // Best-effort: assume UTF-8, fallback conversion if needed
-            if (! mb_check_encoding($raw, 'UTF-8')) {
-                $raw = mb_convert_encoding($raw, 'UTF-8');
-            }
-
-            return trim($raw);
+            return $raw;
         } catch (\Throwable $e) {
             Log::warning('telegram_file_download_failed', ['e' => $e->getMessage()]);
             return null;
