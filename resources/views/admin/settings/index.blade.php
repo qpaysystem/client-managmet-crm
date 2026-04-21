@@ -184,6 +184,56 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
                 <input type="checkbox" name="ai_include_crm_snapshot" value="1" class="form-check-input" id="ai_include_crm_snapshot" {{ ($settings['ai_include_crm_snapshot'] ?? '1') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="ai_include_crm_snapshot">В чате «ИИ помощник» подмешивать расширенный снимок CRM (клиенты, проекты, квартиры, транзакции, задачи, стройка, инвестиции, справочники) — больше токенов на запрос</label>
             </div>
+
+            <hr class="my-3">
+            <h6 class="mb-2">ИИ для Telegram «Элитный»: 2 модели (текст / медиа)</h6>
+            <p class="text-muted small mb-2">Можно разнести: текст анализировать через DeepSeek, а файлы/картинки/аудио — через OpenAI.</p>
+
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">Text провайдер</label>
+                    <select name="ai_text_provider" class="form-select">
+                        <option value="" @selected(($settings['ai_text_provider'] ?? '') === '')>— (как общий)</option>
+                        <option value="deepseek" @selected(($settings['ai_text_provider'] ?? '') === 'deepseek')>DeepSeek</option>
+                        <option value="openai" @selected(($settings['ai_text_provider'] ?? '') === 'openai')>OpenAI</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Text model</label>
+                    <input type="text" name="ai_text_model" class="form-control" value="{{ $settings['ai_text_model'] ?? '' }}" placeholder="deepseek-chat / gpt-4.1-mini">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Text base URL</label>
+                    <input type="text" name="ai_text_base_url" class="form-control" value="{{ $settings['ai_text_base_url'] ?? '' }}" placeholder="https://api.deepseek.com/v1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Text API key</label>
+                    <input type="password" name="ai_text_api_key" class="form-control" value="" placeholder="(не менять)">
+                </div>
+            </div>
+
+            <div class="row g-2 mt-1">
+                <div class="col-md-3">
+                    <label class="form-label">Media провайдер</label>
+                    <select name="ai_media_provider" class="form-select">
+                        <option value="" @selected(($settings['ai_media_provider'] ?? '') === '')>— (как общий)</option>
+                        <option value="openai" @selected(($settings['ai_media_provider'] ?? '') === 'openai')>OpenAI</option>
+                        <option value="deepseek" @selected(($settings['ai_media_provider'] ?? '') === 'deepseek')>DeepSeek</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Media model</label>
+                    <input type="text" name="ai_media_model" class="form-control" value="{{ $settings['ai_media_model'] ?? '' }}" placeholder="gpt-4o-mini">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Media base URL</label>
+                    <input type="text" name="ai_media_base_url" class="form-control" value="{{ $settings['ai_media_base_url'] ?? '' }}" placeholder="https://api.openai.com/v1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Media API key</label>
+                    <input type="password" name="ai_media_api_key" class="form-control" value="" placeholder="(не менять)">
+                </div>
+            </div>
         </div>
     </div>
     <button type="submit" class="btn btn-primary">Сохранить настройки</button>

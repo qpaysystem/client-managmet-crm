@@ -45,6 +45,13 @@ class SettingController extends Controller
             'ai_base_url' => Setting::get('ai_base_url', $provider === 'deepseek'
                 ? config('services.deepseek.base_url', 'https://api.deepseek.com/v1')
                 : config('services.openai.base_url', 'https://api.openai.com/v1')),
+            // Split AI settings (text/media) - used for Telegram Elite
+            'ai_text_provider' => Setting::get('ai_text_provider', ''),
+            'ai_text_model' => Setting::get('ai_text_model', ''),
+            'ai_text_base_url' => Setting::get('ai_text_base_url', ''),
+            'ai_media_provider' => Setting::get('ai_media_provider', ''),
+            'ai_media_model' => Setting::get('ai_media_model', ''),
+            'ai_media_base_url' => Setting::get('ai_media_base_url', ''),
 
             // Backward-compatible OpenAI settings (legacy keys)
             'openai_model' => Setting::get('openai_model', config('services.openai.model', 'gpt-4.1-mini')),
@@ -84,6 +91,15 @@ class SettingController extends Controller
             'ai_api_key' => 'nullable|string|max:500',
             'ai_model' => 'nullable|string|max:100',
             'ai_base_url' => 'nullable|string|max:255',
+            // Split AI settings (text/media)
+            'ai_text_provider' => 'nullable|in:openai,deepseek',
+            'ai_text_api_key' => 'nullable|string|max:500',
+            'ai_text_model' => 'nullable|string|max:100',
+            'ai_text_base_url' => 'nullable|string|max:255',
+            'ai_media_provider' => 'nullable|in:openai,deepseek',
+            'ai_media_api_key' => 'nullable|string|max:500',
+            'ai_media_model' => 'nullable|string|max:100',
+            'ai_media_base_url' => 'nullable|string|max:255',
 
             // Legacy OpenAI settings
             'openai_api_key' => 'nullable|string|max:500',
@@ -124,6 +140,30 @@ class SettingController extends Controller
         }
         Setting::set('ai_model', $request->get('ai_model', ''));
         Setting::set('ai_base_url', $request->get('ai_base_url', ''));
+
+        // Split AI: do not overwrite api key if empty
+        if ($request->filled('ai_text_provider')) {
+            Setting::set('ai_text_provider', $request->get('ai_text_provider'));
+        } elseif ($request->get('ai_text_provider') === null) {
+            // allow clearing by submitting empty select (sent as empty string)
+            Setting::set('ai_text_provider', (string) $request->get('ai_text_provider', ''));
+        }
+        if ($request->filled('ai_text_api_key')) {
+            Setting::set('ai_text_api_key', $request->get('ai_text_api_key'));
+        }
+        Setting::set('ai_text_model', $request->get('ai_text_model', ''));
+        Setting::set('ai_text_base_url', $request->get('ai_text_base_url', ''));
+
+        if ($request->filled('ai_media_provider')) {
+            Setting::set('ai_media_provider', $request->get('ai_media_provider'));
+        } elseif ($request->get('ai_media_provider') === null) {
+            Setting::set('ai_media_provider', (string) $request->get('ai_media_provider', ''));
+        }
+        if ($request->filled('ai_media_api_key')) {
+            Setting::set('ai_media_api_key', $request->get('ai_media_api_key'));
+        }
+        Setting::set('ai_media_model', $request->get('ai_media_model', ''));
+        Setting::set('ai_media_base_url', $request->get('ai_media_base_url', ''));
 
         // OpenAI settings: do not overwrite api key if empty
         if ($request->filled('openai_api_key')) {

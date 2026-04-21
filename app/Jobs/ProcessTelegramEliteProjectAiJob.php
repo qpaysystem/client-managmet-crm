@@ -71,7 +71,7 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
         }
 
         $ai = app(OpenAiChatService::class);
-        $c = $ai->getResolvedCredentials();
+        $c = $ai->getTextCredentials();
         if (($c['apiKey'] ?? '') === '') {
             Log::warning('telegram_elite_skip', ['reason' => 'no_ai_api_key']);
             return;
@@ -153,7 +153,7 @@ SYS;
             $bytes = TelegramService::downloadTelegramFileBytes($this->fileId, 1_800_000);
             if ($bytes) {
                 $mime = $this->mimeType ?: 'image/jpeg';
-                $vision = app(OpenAiChatService::class)->describeImageForEliteGroup($bytes, $mime, $this->text);
+                $vision = $ai->describeImageForEliteGroup($bytes, $mime, $this->text);
                 if ($vision) {
                     $attachmentText = $vision;
                 }

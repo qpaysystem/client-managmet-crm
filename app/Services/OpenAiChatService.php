@@ -14,6 +14,28 @@ use Illuminate\Support\Facades\Log;
 class OpenAiChatService
 {
     /**
+     * Два набора настроек:
+     * - text: для текстовых диалогов/аналитики (например DeepSeek)
+     * - media: для изображений/аудио/вложений (например OpenAI)
+     *
+     * Если набор не настроен — fallback на старые ai_* настройки.
+     *
+     * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
+     */
+    public function getTextCredentials(): array
+    {
+        return $this->resolveCredentialsByKind('text');
+    }
+
+    /**
+     * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
+     */
+    public function getMediaCredentials(): array
+    {
+        return $this->resolveCredentialsByKind('media');
+    }
+
+    /**
      * Единые настройки провайдера для админ-чата, Telegram и CRM-вопросов (DeepSeek / OpenAI из настроек).
      *
      * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
@@ -36,6 +58,38 @@ class OpenAiChatService
         $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
         $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
         $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
+        $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
+
+        return [
+            'provider' => $provider,
+            'apiKey' => $apiKey,
+            'model' => $model,
+            'baseUrl' => $baseUrl,
+        ];
+    }
+
+    /**
+     * @param  'text'|'media'  $kind
+     * @return array{provider: string, apiKey: string, model: string, baseUrl: string}
+     */
+    private function resolveCredentialsByKind(string $kind): array
+    {
+        $providerKey = "ai_{$kind}_provider";
+        $apiKeyKey = "ai_{$kind}_api_key";
+        $modelKey = "ai_{$kind}_model";
+        $baseUrlKey = "ai_{$kind}_base_url";
+
+        $provider = (string) Setting::get($providerKey, '');
+        if ($provider === '') {
+            return $this->resolveCredentials();
+        }
+        if (! in_array($provider, ['openai', 'deepseek'], true)) {
+            $provider = 'openai';
+        }
+
+        $apiKey = (string) Setting::get($apiKeyKey, config("services.{$provider}.api_key"));
+        $model = (string) Setting::get($modelKey, config("services.{$provider}.model"));
+        $baseUrlRaw = (string) Setting::get($baseUrlKey, config("services.{$provider}.base_url"));
         $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
 
         return [
@@ -491,7 +545,7 @@ class OpenAiChatService
      */
     public function describeImageForEliteGroup(string $imageBytes, string $mimeType, string $hintText = ''): ?string
     {
-        $c = $this->resolveCredentials();
+        $c = $this->getMediaCredentials();
         if (($c['provider'] ?? '') !== 'openai') {
             return null;
         }
