@@ -86,7 +86,11 @@ class TelegramLongPollCommand extends Command
                 ]);
 
             if (! $response->successful()) {
-                $this->warn('getUpdates HTTP '.$response->status().' — пауза 5 с');
+                $body = (string) $response->body();
+                $data = self::decodeTelegramJson($body);
+                $desc = is_array($data) ? (string) ($data['description'] ?? '') : '';
+                $extra = $desc !== '' ? (': '.$desc) : (': '.substr($body, 0, 200));
+                $this->warn('getUpdates HTTP '.$response->status().$extra.' — пауза 5 с');
                 sleep(5);
 
                 continue;
