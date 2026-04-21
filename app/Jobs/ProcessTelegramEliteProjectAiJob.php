@@ -183,11 +183,7 @@ SYS;
             'attachment_text_len' => $attachmentText ? mb_strlen($attachmentText) : 0,
         ]);
 
-        $fallbackEventForDocument = false;
-        if ($this->messageType === 'document' && $attachmentText) {
-            // Если документ пришёл без "важности" по мнению модели — всё равно фиксируем событие, чтобы не терять документы.
-            $fallbackEventForDocument = true;
-        }
+        $fallbackEventForDocument = ($this->messageType === 'document' && (bool) $this->fileId);
 
         $context = [
             'project' => ['id' => $project->id, 'name' => $project->name],
@@ -249,7 +245,7 @@ SYS;
             if (! is_array($decoded)) {
                 Log::warning('telegram_elite_ai_bad_json', ['content' => mb_substr($content, 0, 400)]);
                 if ($fallbackEventForDocument) {
-                    $summary = trim(preg_replace('/\s+/u', ' ', $attachmentText));
+                    $summary = $attachmentText ? trim(preg_replace('/\s+/u', ' ', $attachmentText)) : '';
                     if (mb_strlen($summary) > 600) {
                         $summary = mb_substr($summary, 0, 600) . '…';
                     }
@@ -273,7 +269,7 @@ SYS;
             ]);
             if (! $important) {
                 if ($fallbackEventForDocument) {
-                    $summary = trim(preg_replace('/\s+/u', ' ', $attachmentText));
+                    $summary = $attachmentText ? trim(preg_replace('/\s+/u', ' ', $attachmentText)) : '';
                     if (mb_strlen($summary) > 600) {
                         $summary = mb_substr($summary, 0, 600) . '…';
                     }
