@@ -9,7 +9,7 @@
 <form method="post" action="{{ route('admin.payment-invoices.update', $invoice) }}">
     @csrf
     @method('PUT')
-    @include('admin.payment-invoices._form', ['invoice' => $invoice, 'users' => $users])
+    @include('admin.payment-invoices._form', ['invoice' => $invoice, 'users' => $users, 'projects' => $projects, 'expenseItems' => $expenseItems])
     <div class="mt-3">
         <button type="submit" class="btn btn-primary">Сохранить</button>
         <a href="{{ route('admin.payment-invoices.index') }}" class="btn btn-secondary">Отмена</a>

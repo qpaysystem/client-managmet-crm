@@ -5,7 +5,7 @@
 
 <form method="post" action="{{ route('admin.payment-invoices.store') }}">
     @csrf
-    @include('admin.payment-invoices._form', ['invoice' => null, 'users' => $users])
+    @include('admin.payment-invoices._form', ['invoice' => null, 'users' => $users, 'projects' => $projects, 'expenseItems' => $expenseItems])
     <div class="mt-3">
         <button type="submit" class="btn btn-primary">Создать</button>
         <a href="{{ route('admin.payment-invoices.index') }}" class="btn btn-secondary">Отмена</a>

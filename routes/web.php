@@ -189,6 +189,7 @@ Route::prefix('admin')->middleware('auth')->name('admin.')->group(function () {
     Route::post('settings', [SettingController::class, 'store'])->name('settings.store');
     Route::post('settings/mail-test', [SettingController::class, 'mailTest'])->name('settings.mail-test');
 
+    Route::get('payment-invoices/expense-items', [PaymentInvoiceController::class, 'expenseItems'])->name('payment-invoices.expense-items');
     Route::resource('payment-invoices', PaymentInvoiceController::class)->except(['show']);
 
     // AI assistant

@@ -3,18 +3,53 @@
 @endphp
 
 <div class="row g-3">
-    <div class="col-md-12">
-        <label class="form-label">Статья расходов *</label>
-        <input type="text" name="expense_article" class="form-control @error('expense_article') is-invalid @enderror"
-               value="{{ old('expense_article', $invoice?->expense_article) }}" required>
-        @error('expense_article')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-
     <div class="col-md-4">
         <label class="form-label">Сумма платежа *</label>
         <input type="number" name="amount" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror"
                value="{{ old('amount', $invoice?->amount) }}" required>
         @error('amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label">Проект *</label>
+        <select name="project_id" id="pi_project_id" class="form-select @error('project_id') is-invalid @enderror" required>
+            <option value="">—</option>
+            @foreach($projects as $p)
+                <option value="{{ $p->id }}" @selected((string) old('project_id', $invoice?->project_id) === (string) $p->id)>{{ $p->name }}</option>
+            @endforeach
+        </select>
+        @error('project_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label">Статья расходов *</label>
+        <select name="project_expense_item_id" id="pi_project_expense_item_id" class="form-select @error('project_expense_item_id') is-invalid @enderror" required>
+            <option value="">—</option>
+            @foreach($expenseItems as $it)
+                <option value="{{ $it->id }}" @selected((string) old('project_expense_item_id', $invoice?->project_expense_item_id) === (string) $it->id)>{{ $it->name }}</option>
+            @endforeach
+        </select>
+        @error('project_expense_item_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label">Статус *</label>
+        <select name="status" class="form-select @error('status') is-invalid @enderror" required>
+            @foreach(\App\Models\PaymentInvoice::statusLabels() as $value => $label)
+                <option value="{{ $value }}" @selected(old('status', $invoice?->status ?? \App\Models\PaymentInvoice::STATUS_UNPAID) === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+        @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label">Приоритет оплаты *</label>
+        <select name="priority" class="form-select @error('priority') is-invalid @enderror" required>
+            @foreach(\App\Models\PaymentInvoice::priorityLabels() as $value => $label)
+                <option value="{{ $value }}" @selected(old('priority', $invoice?->priority ?? \App\Models\PaymentInvoice::PRIORITY_PLANNED) === $value)>{{ $label }}</option>
+            @endforeach
+        </select>
+        @error('priority')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 
     <div class="col-md-4">
@@ -26,16 +61,6 @@
             @endforeach
         </select>
         @error('responsible_user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-
-    <div class="col-md-4">
-        <label class="form-label">Приоритет оплаты *</label>
-        <select name="priority" class="form-select @error('priority') is-invalid @enderror" required>
-            @foreach(\App\Models\PaymentInvoice::priorityLabels() as $value => $label)
-                <option value="{{ $value }}" @selected(old('priority', $invoice?->priority ?? \App\Models\PaymentInvoice::PRIORITY_PLANNED) === $value)>{{ $label }}</option>
-            @endforeach
-        </select>
-        @error('priority')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 
     <div class="col-md-6">
@@ -58,4 +83,38 @@
         @error('comments')<div class="invalid-feedback">{{ $message }}</div>@enderror
     </div>
 </div>
+
+@push('scripts')
+<script>
+(() => {
+    const projectSelect = document.getElementById('pi_project_id');
+    const expenseSelect = document.getElementById('pi_project_expense_item_id');
+    if (!projectSelect || !expenseSelect) return;
+
+    const loadExpenseItems = async (projectId) => {
+        expenseSelect.innerHTML = '<option value="">—</option>';
+        if (!projectId) return;
+        try {
+            const resp = await fetch(`{{ route('admin.payment-invoices.expense-items') }}?project_id=${encodeURIComponent(projectId)}`, {
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await resp.json();
+            const items = Array.isArray(data.items) ? data.items : [];
+            for (const it of items) {
+                const opt = document.createElement('option');
+                opt.value = it.id;
+                opt.textContent = it.name;
+                expenseSelect.appendChild(opt);
+            }
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    projectSelect.addEventListener('change', async () => {
+        await loadExpenseItems(projectSelect.value);
+    });
+})();
+</script>
+@endpush
 

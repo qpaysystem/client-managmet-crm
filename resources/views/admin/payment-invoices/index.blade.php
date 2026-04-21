@@ -12,7 +12,16 @@
             <label class="form-label form-label-sm">Поиск</label>
             <input type="text" name="search" class="form-control form-control-sm" value="{{ request('search') }}" placeholder="статья или комментарии">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
+            <label class="form-label form-label-sm">Статус</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">Все</option>
+                @foreach(\App\Models\PaymentInvoice::statusLabels() as $value => $label)
+                    <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md-2">
             <label class="form-label form-label-sm">Приоритет</label>
             <select name="priority" class="form-select form-select-sm">
                 <option value="">Все</option>
@@ -21,7 +30,16 @@
                 @endforeach
             </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
+            <label class="form-label form-label-sm">Проект</label>
+            <select name="project_id" class="form-select form-select-sm">
+                <option value="">Все</option>
+                @foreach($projects as $p)
+                    <option value="{{ $p->id }}" @selected((string) request('project_id') === (string) $p->id)>{{ $p->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="col-md-2">
             <label class="form-label form-label-sm">Ответственный</label>
             <select name="responsible_user_id" class="form-select form-select-sm">
                 <option value="">Все</option>
@@ -42,11 +60,13 @@
         <table class="table table-hover mb-0">
             <thead>
                 <tr>
+                    <th>Проект</th>
                     <th>Статья</th>
                     <th class="text-end">Сумма</th>
                     <th>Получен</th>
                     <th>Крайний срок</th>
                     <th>Приоритет</th>
+                    <th>Статус</th>
                     <th>Ответственный</th>
                     <th>Комментарий</th>
                     <th></th>
@@ -55,7 +75,8 @@
             <tbody>
                 @forelse($invoices as $invoice)
                     <tr>
-                        <td>{{ \Illuminate\Support\Str::limit($invoice->expense_article, 60) }}</td>
+                        <td>{{ $invoice->project ? \Illuminate\Support\Str::limit($invoice->project->name, 30) : '—' }}</td>
+                        <td>{{ \Illuminate\Support\Str::limit($invoice->projectExpenseItem?->name ?? $invoice->expense_article, 60) }}</td>
                         <td class="text-end">{{ number_format((float) $invoice->amount, 2) }} {{ \App\Models\Setting::get('currency', 'RUB') }}</td>
                         <td>{{ $invoice->received_date ? $invoice->received_date->format('d.m.Y') : '—' }}</td>
                         <td>
@@ -81,6 +102,12 @@
                             @endphp
                             <span class="badge bg-{{ $badge }}">{{ $invoice->priority_label }}</span>
                         </td>
+                        <td>
+                            @php
+                                $statusBadge = $invoice->status === \App\Models\PaymentInvoice::STATUS_PAID ? 'success' : 'secondary';
+                            @endphp
+                            <span class="badge bg-{{ $statusBadge }}">{{ $invoice->status_label }}</span>
+                        </td>
                         <td>{{ $invoice->responsibleUser ? $invoice->responsibleUser->name : '—' }}</td>
                         <td class="text-muted">{{ $invoice->comments ? \Illuminate\Support\Str::limit($invoice->comments, 60) : '—' }}</td>
                         <td class="text-nowrap">
@@ -93,7 +120,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-muted">Пока нет счетов</td></tr>
+                    <tr><td colspan="10" class="text-muted">Пока нет счетов</td></tr>
                 @endforelse
             </tbody>
         </table>
