@@ -147,11 +147,25 @@ class AiAssistantController extends Controller
                 $author = 'Участник';
             }
 
+            $text = $m->text;
+            if (($text === null || trim($text) === '') && $m->caption) {
+                $text = $m->caption;
+            }
+            if (($text === null || trim((string) $text) === '') && $m->file_name) {
+                $text = 'Файл: ' . $m->file_name;
+            }
+            if (($text === null || trim((string) $text) === '') && $m->message_type === 'photo') {
+                $text = 'Фото' . ($m->caption ? (': ' . $m->caption) : '');
+            }
+
             return [
                 'id' => $m->id,
                 'telegram_message_id' => $m->message_id,
                 'author' => $author,
-                'text' => $m->text,
+                'text' => $text,
+                'message_type' => $m->message_type,
+                'file_name' => $m->file_name,
+                'mime_type' => $m->mime_type,
                 'at' => $m->message_date?->format('d.m.Y H:i') ?? '',
             ];
         });

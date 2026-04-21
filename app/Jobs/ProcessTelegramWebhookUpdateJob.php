@@ -156,6 +156,12 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         if ($analysisText === '' && $fileName) {
             $analysisText = 'Файл: ' . $fileName;
         }
+        if ($analysisText === '' && $messageType === 'photo') {
+            $analysisText = $caption ? ('Фото: ' . $caption) : 'Фото без подписи';
+        }
+        if ($analysisText === '' && $messageType === 'document') {
+            $analysisText = 'Документ без подписи' . ($fileName ? (': ' . $fileName) : '');
+        }
 
         $configuredNotificationsChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
         $configuredEliteChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_elite_chat_id', ''));
