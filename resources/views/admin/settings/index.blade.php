@@ -85,6 +85,32 @@ MAIL_FROM_NAME="${APP_NAME}"</pre>
                 <label class="form-label">Chat ID</label>
                 <input type="text" name="telegram_chat_id" class="form-control" value="{{ $settings['telegram_chat_id'] ?? '' }}" placeholder="123456789 или -1001234567890">
             </div>
+            <hr class="my-3">
+            <h6 class="mb-2">Группа «управление проектом Элитный»</h6>
+            <p class="text-muted small mb-2">Вторая группа: CRM сохраняет все сообщения и (опционально) запускает ИИ-анализ для автосоздания событий/задач по контексту проекта.</p>
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">Chat ID группы «Элитный»</label>
+                    <input type="text" name="telegram_elite_chat_id" class="form-control" value="{{ $settings['telegram_elite_chat_id'] ?? '' }}" placeholder="-1001234567890">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Проект в CRM</label>
+                    <select name="telegram_elite_project_id" class="form-select">
+                        <option value="">—</option>
+                        @foreach($projects ?? [] as $p)
+                            <option value="{{ $p->id }}" @selected((string) ($settings['telegram_elite_project_id'] ?? '') === (string) $p->id)>{{ $p->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Cooldown (сек)</label>
+                    <input type="number" name="telegram_elite_ai_cooldown_seconds" class="form-control" value="{{ $settings['telegram_elite_ai_cooldown_seconds'] ?? '' }}" min="0" max="86400" placeholder="0">
+                </div>
+            </div>
+            <div class="form-check mt-2">
+                <input type="checkbox" name="telegram_elite_ai_events" value="1" class="form-check-input" id="telegram_elite_ai_events" {{ ($settings['telegram_elite_ai_events'] ?? '1') == '1' ? 'checked' : '' }}>
+                <label class="form-check-label" for="telegram_elite_ai_events">ИИ-анализировать сообщения и автоматически создавать события/задачи</label>
+            </div>
             <div class="form-check mb-2">
                 <input type="checkbox" name="telegram_notify_transactions" value="1" class="form-check-input" id="telegram_notify" {{ ($settings['telegram_notify_transactions'] ?? '0') == '1' ? 'checked' : '' }}>
                 <label class="form-check-label" for="telegram_notify">Отправлять уведомления о транзакциях</label>

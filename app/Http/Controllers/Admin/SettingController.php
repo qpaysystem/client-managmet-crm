@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Project;
 use App\Models\Setting;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,10 @@ class SettingController extends Controller
             'telegram_bot_token' => Setting::get('telegram_bot_token', ''),
             'telegram_bot_username' => Setting::get('telegram_bot_username', ''),
             'telegram_chat_id' => Setting::get('telegram_chat_id', ''),
+            'telegram_elite_chat_id' => Setting::get('telegram_elite_chat_id', ''),
+            'telegram_elite_project_id' => Setting::get('telegram_elite_project_id', ''),
+            'telegram_elite_ai_events' => Setting::get('telegram_elite_ai_events', '1'),
+            'telegram_elite_ai_cooldown_seconds' => Setting::get('telegram_elite_ai_cooldown_seconds', ''),
             'telegram_notify_transactions' => Setting::get('telegram_notify_transactions', '0'),
             'telegram_notify_tasks' => Setting::get('telegram_notify_tasks', '0'),
             'telegram_notify_stages' => Setting::get('telegram_notify_stages', '0'),
@@ -45,7 +50,10 @@ class SettingController extends Controller
             'openai_model' => Setting::get('openai_model', config('services.openai.model', 'gpt-4.1-mini')),
             'openai_base_url' => Setting::get('openai_base_url', config('services.openai.base_url', 'https://api.openai.com/v1')),
         ];
-        return view('admin.settings.index', compact('settings'));
+
+        $projects = Project::query()->orderBy('name')->get(['id', 'name']);
+
+        return view('admin.settings.index', compact('settings', 'projects'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -57,6 +65,10 @@ class SettingController extends Controller
             'telegram_bot_token' => 'nullable|string|max:255',
             'telegram_bot_username' => 'nullable|string|max:100',
             'telegram_chat_id' => 'nullable|string|max:50',
+            'telegram_elite_chat_id' => 'nullable|string|max:50',
+            'telegram_elite_project_id' => 'nullable|integer|exists:projects,id',
+            'telegram_elite_ai_events' => 'in:0,1',
+            'telegram_elite_ai_cooldown_seconds' => 'nullable|integer|min:0|max:86400',
             'telegram_notify_transactions' => 'in:0,1',
             'telegram_notify_tasks' => 'in:0,1',
             'telegram_notify_stages' => 'in:0,1',
@@ -85,6 +97,10 @@ class SettingController extends Controller
         Setting::set('telegram_bot_token', $request->get('telegram_bot_token', ''));
         Setting::set('telegram_bot_username', $request->get('telegram_bot_username', ''));
         Setting::set('telegram_chat_id', $request->get('telegram_chat_id', ''));
+        Setting::set('telegram_elite_chat_id', $request->get('telegram_elite_chat_id', ''));
+        Setting::set('telegram_elite_project_id', (string) ($request->get('telegram_elite_project_id', '') ?? ''));
+        Setting::set('telegram_elite_ai_events', $request->get('telegram_elite_ai_events', '1'));
+        Setting::set('telegram_elite_ai_cooldown_seconds', (string) ($request->get('telegram_elite_ai_cooldown_seconds', '') ?? ''));
         Setting::set('telegram_notify_transactions', $request->get('telegram_notify_transactions', '0'));
         Setting::set('telegram_notify_tasks', $request->get('telegram_notify_tasks', '0'));
         Setting::set('telegram_notify_stages', $request->get('telegram_notify_stages', '0'));

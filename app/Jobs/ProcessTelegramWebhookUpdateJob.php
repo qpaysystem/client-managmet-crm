@@ -7,6 +7,8 @@ use App\Models\TelegramGroupMessage;
 use App\Services\OpenAiChatService;
 use App\Services\TelegramGroupAssistantService;
 use App\Services\TelegramService;
+use App\Jobs\ProcessTelegramEliteProjectAiJob;
+use Illuminate\Support\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -52,13 +54,9 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
             return;
         }
 
-        $configuredChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
-        if ($configuredChatId === '') {
-            return;
-        }
-
         $incomingChatId = TelegramService::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
-        if ($incomingChatId !== $configuredChatId) {
+        $allowedChatIds = TelegramService::configuredGroupChatIds();
+        if ($allowedChatIds === [] || ! in_array($incomingChatId, $allowedChatIds, true)) {
             return;
         }
 
@@ -117,6 +115,32 @@ class ProcessTelegramWebhookUpdateJob implements ShouldQueue
         }
 
         if ($text === null || $text === '') {
+            return;
+        }
+
+        $configuredNotificationsChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
+        $configuredEliteChatId = TelegramService::normalizeChatIdForStorage((string) Setting::get('telegram_elite_chat_id', ''));
+
+        if ($configuredEliteChatId !== '' && $incomingChatId === $configuredEliteChatId) {
+            if (Setting::get('telegram_elite_ai_events', '1') === '1') {
+                $fromName = is_array($from) ? trim(((string) ($from['first_name'] ?? '')).' '.((string) ($from['last_name'] ?? ''))) : '';
+                $fromName = trim($fromName) !== '' ? trim($fromName) : (is_array($from) ? (string) ($from['username'] ?? '') : '');
+                $when = $date ? Carbon::createFromTimestamp($date) : now();
+
+                ProcessTelegramEliteProjectAiJob::dispatch(
+                    $text,
+                    $incomingChatId,
+                    $messageId,
+                    $fromName,
+                    $when->format('Y-m-d H:i:s')
+                )->onConnection('database');
+            }
+
+            return;
+        }
+
+        // Ниже — поведение «основной» группы уведомлений/вопросов по CRM.
+        if ($configuredNotificationsChatId === '' || $incomingChatId !== $configuredNotificationsChatId) {
             return;
         }
 

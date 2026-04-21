@@ -29,7 +29,7 @@ class TelegramService
     }
 
     /**
-     * Тот же фильтр, что у POST /telegram/webhook: только группа/супергруппа и совпадение telegram_chat_id.
+     * Тот же фильтр, что у POST /telegram/webhook: только группа/супергруппа и совпадение с одним из настроенных chat_id.
      *
      * @param  array<string, mixed>  $payload  Объект Update от Telegram (message / edited_message).
      */
@@ -47,13 +47,33 @@ class TelegramService
         if (! in_array($chatType, ['group', 'supergroup'], true)) {
             return false;
         }
-        $configuredChatId = self::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', ''));
-        if ($configuredChatId === '') {
+        $allowedChatIds = self::configuredGroupChatIds();
+        if ($allowedChatIds === []) {
             return false;
         }
         $incomingChatId = self::normalizeChatIdForStorage((string) ($chat['id'] ?? ''));
 
-        return $incomingChatId === $configuredChatId;
+        return in_array($incomingChatId, $allowedChatIds, true);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function configuredGroupChatIds(): array
+    {
+        $ids = [
+            self::normalizeChatIdForStorage((string) Setting::get('telegram_chat_id', '')),
+            self::normalizeChatIdForStorage((string) Setting::get('telegram_elite_chat_id', '')),
+        ];
+
+        $out = [];
+        foreach ($ids as $id) {
+            if ($id !== '') {
+                $out[] = $id;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 
     /** ID пользователя бота по токену (кэш), чтобы отличать нашего бота от чужих в группе. */

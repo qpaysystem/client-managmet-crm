@@ -1,0 +1,254 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Models\AiCompanyEvent;
+use App\Models\Project;
+use App\Models\Setting;
+use App\Models\Task;
+use App\Models\TelegramGroupMessage;
+use App\Services\OpenAiChatService;
+use App\Services\TelegramService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Новая группа «управление проектом Элитный»: сохраняем все сообщения (общая таблица),
+ * затем ИИ извлекает важные события/задачи и фиксирует их в CRM.
+ */
+class ProcessTelegramEliteProjectAiJob implements ShouldQueue
+{
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
+
+    public int $timeout = 240;
+
+    public int $tries = 2;
+
+    public function __construct(
+        public string $text,
+        public string $chatId,
+        public int $messageId,
+        public string $fromName,
+        /** ISO-ish datetime string (server-local) */
+        public string $messageDate
+    ) {}
+
+    public function handle(): void
+    {
+        $projectId = (int) Setting::get('telegram_elite_project_id', 0);
+        if ($projectId <= 0) {
+            Log::info('telegram_elite_skip', ['reason' => 'no_project_id']);
+            return;
+        }
+
+        $cooldownSec = max(0, (int) Setting::get('telegram_elite_ai_cooldown_seconds', 0));
+        if ($cooldownSec > 0 && ! Cache::add('telegram_elite_ai_cd_'.$this->chatId, 1, $cooldownSec)) {
+            Log::info('telegram_elite_skip', ['reason' => 'cooldown', 'seconds' => $cooldownSec]);
+            return;
+        }
+
+        if (Cache::has('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId)) {
+            return;
+        }
+
+        $project = Project::find($projectId);
+        if (! $project) {
+            Log::warning('telegram_elite_skip', ['reason' => 'project_not_found', 'project_id' => $projectId]);
+            return;
+        }
+
+        $ai = app(OpenAiChatService::class);
+        $c = $ai->getResolvedCredentials();
+        if (($c['apiKey'] ?? '') === '') {
+            Log::warning('telegram_elite_skip', ['reason' => 'no_ai_api_key']);
+            return;
+        }
+
+        $recent = TelegramGroupMessage::query()
+            ->where('chat_id', TelegramService::normalizeChatIdForStorage($this->chatId))
+            ->orderByDesc('id')
+            ->limit(40)
+            ->get(['from_first_name', 'from_username', 'text', 'message_date'])
+            ->reverse()
+            ->values()
+            ->map(fn ($m) => [
+                'from' => trim((string) ($m->from_first_name ?? '')) !== '' ? $m->from_first_name : ($m->from_username ?? '—'),
+                'at' => $m->message_date?->format('Y-m-d H:i') ?? null,
+                'text' => $m->text,
+            ])
+            ->all();
+
+        $openTasks = Task::query()
+            ->where('project_id', $project->id)
+            ->whereIn('status', [
+                Task::STATUS_IN_DEVELOPMENT,
+                Task::STATUS_PROCESSING,
+                Task::STATUS_EXECUTION,
+            ])
+            ->orderBy('status')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->limit(25)
+            ->get(['id', 'title', 'status', 'due_date', 'responsible_user_id'])
+            ->map(fn (Task $t) => [
+                'id' => $t->id,
+                'title' => $t->title,
+                'status' => $t->status,
+                'due_date' => $t->due_date?->format('Y-m-d'),
+                'responsible_user_id' => $t->responsible_user_id,
+            ])
+            ->all();
+
+        $companyEvents = AiCompanyEvent::query()
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get(['id', 'description', 'created_at'])
+            ->map(fn (AiCompanyEvent $e) => [
+                'id' => $e->id,
+                'recorded_at' => $e->created_at?->format('Y-m-d H:i'),
+                'description' => $e->description,
+            ])
+            ->values()
+            ->all();
+
+        $system = <<<'SYS'
+Ты — помощник руководителя проекта. Твоя задача — по входящему сообщению из рабочей Telegram-группы определить, является ли оно важным для фиксации в CRM.
+
+Правила:
+- Если сообщение НЕ несёт управленческой ценности (болтовня, эмоции без фактов, мемы, приветствия) — верни important=false.
+- Если в сообщении есть факты/решения/риски/изменения сроков/стоимости/договорённости/проблемы на объекте — important=true и создай 1–3 кратких событий.
+- Если в сообщении содержится явное поручение или работа, которую нужно сделать — создай задачи (tasks_to_create).
+- Не выдумывай детали. Если срок не указан — due_date=null.
+- Всегда возвращай только валидный JSON без markdown и без пояснений.
+
+Формат ответа (JSON):
+{
+  "important": true|false,
+  "events_to_create": ["..."],
+  "tasks_to_create": [
+    {"title":"...", "description":"...", "due_date":"YYYY-MM-DD"|null}
+  ]
+}
+SYS;
+
+        $context = [
+            'project' => ['id' => $project->id, 'name' => $project->name],
+            'open_tasks' => $openTasks,
+            'company_events' => $companyEvents,
+            'recent_group_messages' => $recent,
+            'incoming' => [
+                'from' => $this->fromName,
+                'at' => $this->messageDate,
+                'text' => $this->text,
+            ],
+        ];
+
+        $messages = [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'system', 'content' => 'CONTEXT_JSON: ' . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)],
+            ['role' => 'user', 'content' => $this->text],
+        ];
+
+        try {
+            $response = Http::connectTimeout(15)
+                ->timeout(120)
+                ->withToken($c['apiKey'])
+                ->acceptJson()
+                ->post("{$c['baseUrl']}/chat/completions", [
+                    'model' => $c['model'],
+                    'messages' => $messages,
+                    'temperature' => 0.2,
+                    'max_tokens' => 700,
+                ]);
+
+            if (! $response->successful()) {
+                Log::warning('telegram_elite_ai_http', ['status' => $response->status(), 'body' => mb_substr((string) $response->body(), 0, 400)]);
+                return;
+            }
+
+            $json = $response->json();
+            $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+            if ($content === '') {
+                return;
+            }
+
+            $decoded = json_decode($content, true);
+            if (! is_array($decoded)) {
+                // Попытка извлечь JSON из текста (если модель всё же добавила лишнее)
+                $start = strpos($content, '{');
+                $end = strrpos($content, '}');
+                if ($start !== false && $end !== false && $end > $start) {
+                    $decoded = json_decode(substr($content, $start, $end - $start + 1), true);
+                }
+            }
+
+            if (! is_array($decoded)) {
+                Log::warning('telegram_elite_ai_bad_json', ['content' => mb_substr($content, 0, 400)]);
+                return;
+            }
+
+            $important = (bool) ($decoded['important'] ?? false);
+            if (! $important) {
+                Cache::put('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId, 1, now()->addDays(7));
+                return;
+            }
+
+            $events = $decoded['events_to_create'] ?? [];
+            if (is_array($events)) {
+                foreach (array_slice($events, 0, 3) as $e) {
+                    $text = trim((string) $e);
+                    if ($text === '') {
+                        continue;
+                    }
+                    AiCompanyEvent::create([
+                        'description' => 'Проект «'.$project->name.'»: '.$text,
+                        'created_by_user_id' => null,
+                    ]);
+                }
+            }
+
+            $tasks = $decoded['tasks_to_create'] ?? [];
+            if (is_array($tasks)) {
+                foreach (array_slice($tasks, 0, 5) as $t) {
+                    if (! is_array($t)) {
+                        continue;
+                    }
+                    $title = trim((string) ($t['title'] ?? ''));
+                    if ($title === '') {
+                        continue;
+                    }
+                    $desc = trim((string) ($t['description'] ?? ''));
+                    $due = $t['due_date'] ?? null;
+                    $due = is_string($due) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due) ? $due : null;
+
+                    Task::create([
+                        'title' => $title,
+                        'description' => $desc !== '' ? $desc : null,
+                        'status' => Task::STATUS_PROCESSING,
+                        'show_on_board' => true,
+                        'client_id' => null,
+                        'responsible_user_id' => null,
+                        'project_id' => $project->id,
+                        'budget' => null,
+                        'due_date' => $due,
+                        'sort_order' => (Task::where('status', Task::STATUS_PROCESSING)->max('sort_order') ?? 0) + 1,
+                    ]);
+                }
+            }
+
+            Cache::put('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId, 1, now()->addDays(7));
+        } catch (\Throwable $e) {
+            Log::error('telegram_elite_ai_exception', ['e' => $e->getMessage()]);
+        }
+    }
+}
+
