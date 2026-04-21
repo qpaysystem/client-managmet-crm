@@ -54,6 +54,15 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
             return;
         }
 
+        Log::info('telegram_elite_start', [
+            'chat' => $this->chatId,
+            'message_id' => $this->messageId,
+            'type' => $this->messageType,
+            'file_name' => $this->fileName,
+            'mime_type' => $this->mimeType,
+            'text_len' => mb_strlen($this->text),
+        ]);
+
         $cooldownSec = max(0, (int) Setting::get('telegram_elite_ai_cooldown_seconds', 0));
         if ($cooldownSec > 0 && ! Cache::add('telegram_elite_ai_cd_'.$this->chatId, 1, $cooldownSec)) {
             Log::info('telegram_elite_skip', ['reason' => 'cooldown', 'seconds' => $cooldownSec]);
@@ -76,6 +85,14 @@ class ProcessTelegramEliteProjectAiJob implements ShouldQueue
             Log::warning('telegram_elite_skip', ['reason' => 'no_ai_api_key']);
             return;
         }
+
+        $media = $ai->getMediaCredentials();
+        Log::info('telegram_elite_ai_config', [
+            'text_provider' => $c['provider'] ?? null,
+            'text_model' => $c['model'] ?? null,
+            'media_provider' => $media['provider'] ?? null,
+            'media_model' => $media['model'] ?? null,
+        ]);
 
         $recent = TelegramGroupMessage::query()
             ->where('chat_id', TelegramService::normalizeChatIdForStorage($this->chatId))
@@ -160,6 +177,12 @@ SYS;
             }
         }
 
+        Log::info('telegram_elite_attachment', [
+            'type' => $this->messageType,
+            'has_file' => (bool) $this->fileId,
+            'attachment_text_len' => $attachmentText ? mb_strlen($attachmentText) : 0,
+        ]);
+
         $context = [
             'project' => ['id' => $project->id, 'name' => $project->name],
             'open_tasks' => $openTasks,
@@ -223,6 +246,11 @@ SYS;
             }
 
             $important = (bool) ($decoded['important'] ?? false);
+            Log::info('telegram_elite_ai_decision', [
+                'important' => $important,
+                'events_n' => is_array($decoded['events_to_create'] ?? null) ? count($decoded['events_to_create']) : null,
+                'tasks_n' => is_array($decoded['tasks_to_create'] ?? null) ? count($decoded['tasks_to_create']) : null,
+            ]);
             if (! $important) {
                 Cache::put('telegram_elite_ai_done_'.$this->chatId.'_'.$this->messageId, 1, now()->addDays(7));
                 return;
