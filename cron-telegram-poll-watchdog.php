@@ -38,7 +38,12 @@ if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
     exit(0);
 }
 
-$pattern = 'artisan telegram:poll';
+// IMPORTANT:
+// `pgrep -f 'artisan telegram:poll'` matches the `pgrep` process itself (because the pattern is present
+// in pgrep command line), which makes the watchdog think there are duplicates and kill the real poller.
+//
+// Use a more specific pattern and the `[p]hp` trick so the pattern does NOT match the pgrep process.
+$pattern = '[p]hp.*artisan telegram:poll';
 $cmdPgrep = 'pgrep -f ' . escapeshellarg($pattern);
 
 $existing = trim((string) shell_exec($cmdPgrep));
