@@ -24,6 +24,20 @@ if (!is_file($artisan)) {
     exit(0);
 }
 
+$lockPath = $projectDir . '/storage/telegram-poll-watchdog.lock';
+$lockDir = dirname($lockPath);
+if (!is_dir($lockDir)) {
+    @mkdir($lockDir, 0775, true);
+}
+$lockHandle = @fopen($lockPath, 'c');
+if ($lockHandle === false) {
+    exit(0);
+}
+// Avoid concurrent cron runs spawning duplicates
+if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+    exit(0);
+}
+
 $pattern = 'artisan telegram:poll';
 $cmdPgrep = 'pgrep -f ' . escapeshellarg($pattern);
 
@@ -33,9 +47,12 @@ $pids = array_values(array_filter(array_map('intval', $pids ?: [])));
 
 // If multiple pollers exist -> kill extras to avoid Telegram getUpdates 409 conflict.
 if (count($pids) > 1) {
-    foreach (array_slice($pids, 1) as $pid) {
+    // Kill all and restart a single clean instance (more reliable than guessing "main" PID)
+    foreach ($pids as $pid) {
         @shell_exec('kill ' . (int) $pid . ' 2>/dev/null');
     }
+    // give OS a moment to reap processes
+    usleep(200000);
 }
 
 // Re-check if any poller remains.
