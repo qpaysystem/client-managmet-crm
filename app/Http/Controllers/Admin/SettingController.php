@@ -56,6 +56,11 @@ class SettingController extends Controller
             // Backward-compatible OpenAI settings (legacy keys)
             'openai_model' => Setting::get('openai_model', config('services.openai.model', 'gpt-4.1-mini')),
             'openai_base_url' => Setting::get('openai_base_url', config('services.openai.base_url', 'https://api.openai.com/v1')),
+            // Отдельные настройки DeepSeek (вкладка «LLM → DeepSeek»)
+            'deepseek_model' => Setting::get('deepseek_model', config('services.deepseek.model', 'deepseek-chat')),
+            'deepseek_base_url' => Setting::get('deepseek_base_url', config('services.deepseek.base_url', 'https://api.deepseek.com/v1')),
+            'openai_api_key_saved' => Setting::get('openai_api_key', '') !== '',
+            'deepseek_api_key_saved' => Setting::get('deepseek_api_key', '') !== '',
         ];
 
         $projects = Project::query()->orderBy('name')->get(['id', 'name']);
@@ -105,6 +110,10 @@ class SettingController extends Controller
             'openai_api_key' => 'nullable|string|max:500',
             'openai_model' => 'nullable|string|max:100',
             'openai_base_url' => 'nullable|string|max:255',
+            // DeepSeek (вкладка LLM)
+            'deepseek_api_key' => 'nullable|string|max:500',
+            'deepseek_model' => 'nullable|string|max:100',
+            'deepseek_base_url' => 'nullable|string|max:255',
         ]);
 
         Setting::set('currency', $request->currency);
@@ -141,12 +150,9 @@ class SettingController extends Controller
         Setting::set('ai_model', $request->get('ai_model', ''));
         Setting::set('ai_base_url', $request->get('ai_base_url', ''));
 
-        // Split AI: do not overwrite api key if empty
-        if ($request->filled('ai_text_provider')) {
-            Setting::set('ai_text_provider', $request->get('ai_text_provider'));
-        } elseif ($request->get('ai_text_provider') === null) {
-            // allow clearing by submitting empty select (sent as empty string)
-            Setting::set('ai_text_provider', (string) $request->get('ai_text_provider', ''));
+        // Split AI: селект «—» шлёт пустую строку — всегда обновляем, если поле в форме
+        if ($request->has('ai_text_provider')) {
+            Setting::set('ai_text_provider', (string) $request->input('ai_text_provider', ''));
         }
         if ($request->filled('ai_text_api_key')) {
             Setting::set('ai_text_api_key', $request->get('ai_text_api_key'));
@@ -154,10 +160,8 @@ class SettingController extends Controller
         Setting::set('ai_text_model', $request->get('ai_text_model', ''));
         Setting::set('ai_text_base_url', $request->get('ai_text_base_url', ''));
 
-        if ($request->filled('ai_media_provider')) {
-            Setting::set('ai_media_provider', $request->get('ai_media_provider'));
-        } elseif ($request->get('ai_media_provider') === null) {
-            Setting::set('ai_media_provider', (string) $request->get('ai_media_provider', ''));
+        if ($request->has('ai_media_provider')) {
+            Setting::set('ai_media_provider', (string) $request->input('ai_media_provider', ''));
         }
         if ($request->filled('ai_media_api_key')) {
             Setting::set('ai_media_api_key', $request->get('ai_media_api_key'));
@@ -171,6 +175,12 @@ class SettingController extends Controller
         }
         Setting::set('openai_model', $request->get('openai_model', ''));
         Setting::set('openai_base_url', $request->get('openai_base_url', ''));
+
+        if ($request->filled('deepseek_api_key')) {
+            Setting::set('deepseek_api_key', $request->get('deepseek_api_key'));
+        }
+        Setting::set('deepseek_model', $request->get('deepseek_model', ''));
+        Setting::set('deepseek_base_url', $request->get('deepseek_base_url', ''));
 
         return back()->with('success', 'Настройки сохранены.');
     }

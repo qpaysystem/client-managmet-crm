@@ -48,8 +48,11 @@ class TelegramDoctorCommand extends Command
         $secret = (string) Setting::get('telegram_webhook_secret', '');
         $this->line('telegram_webhook_secret: '.($secret !== '' ? 'задан (проверяйте заголовок у Telegram)' : '(пусто — секрет не требуется)'));
         $this->line('telegram_group_ai_all: '.(string) Setting::get('telegram_group_ai_all', '1'));
-        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', ''));
-        $this->line('ai_api_key / openai: '.($apiKey !== '' ? 'задан' : '(пусто — ИИ в Telegram не запустится)'));
+        $provider = (string) Setting::get('ai_provider', 'openai');
+        $apiKey = $provider === 'deepseek'
+            ? (string) Setting::get('deepseek_api_key', Setting::get('ai_api_key', ''))
+            : (string) Setting::get('openai_api_key', Setting::get('ai_api_key', ''));
+        $this->line('API key (провайдер '.$provider.'): '.($apiKey !== '' ? 'задан' : '(пусто — ИИ в Telegram не запустится)'));
         try {
             $cred = app(OpenAiChatService::class)->getResolvedCredentials();
             $this->line('ИИ (как у Telegram-агента): provider='.$cred['provider'].', apiKey='.(strlen($cred['apiKey']) > 0 ? 'ok('.strlen($cred['apiKey']).' симв.)' : 'ПУСТО').', model='.($cred['model'] !== '' ? $cred['model'] : '(пусто)'));

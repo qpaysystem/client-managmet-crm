@@ -55,9 +55,15 @@ class OpenAiChatService
             $provider = 'openai';
         }
 
-        $apiKey = (string) Setting::get('ai_api_key', Setting::get('openai_api_key', config("services.{$provider}.api_key")));
-        $model = (string) Setting::get('ai_model', Setting::get('openai_model', config("services.{$provider}.model")));
-        $baseUrlRaw = (string) Setting::get('ai_base_url', Setting::get('openai_base_url', config("services.{$provider}.base_url")));
+        if ($provider === 'deepseek') {
+            $apiKey = (string) Setting::get('deepseek_api_key', Setting::get('ai_api_key', config('services.deepseek.api_key')));
+            $model = (string) Setting::get('deepseek_model', Setting::get('ai_model', config('services.deepseek.model')));
+            $baseUrlRaw = (string) Setting::get('deepseek_base_url', Setting::get('ai_base_url', config('services.deepseek.base_url')));
+        } else {
+            $apiKey = (string) Setting::get('openai_api_key', Setting::get('ai_api_key', config('services.openai.api_key')));
+            $model = (string) Setting::get('openai_model', Setting::get('ai_model', config('services.openai.model')));
+            $baseUrlRaw = (string) Setting::get('openai_base_url', Setting::get('ai_base_url', config('services.openai.base_url')));
+        }
         $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
 
         return [
@@ -87,9 +93,24 @@ class OpenAiChatService
             $provider = 'openai';
         }
 
-        $apiKey = (string) Setting::get($apiKeyKey, config("services.{$provider}.api_key"));
-        $model = (string) Setting::get($modelKey, config("services.{$provider}.model"));
-        $baseUrlRaw = (string) Setting::get($baseUrlKey, config("services.{$provider}.base_url"));
+        $apiKey = (string) Setting::get($apiKeyKey, '');
+        if ($apiKey === '') {
+            $apiKey = $provider === 'deepseek'
+                ? (string) Setting::get('deepseek_api_key', Setting::get('ai_api_key', config('services.deepseek.api_key')))
+                : (string) Setting::get('openai_api_key', Setting::get('ai_api_key', config('services.openai.api_key')));
+        }
+        $model = (string) Setting::get($modelKey, '');
+        if ($model === '') {
+            $model = $provider === 'deepseek'
+                ? (string) Setting::get('deepseek_model', Setting::get('ai_model', config('services.deepseek.model')))
+                : (string) Setting::get('openai_model', Setting::get('ai_model', config('services.openai.model')));
+        }
+        $baseUrlRaw = (string) Setting::get($baseUrlKey, '');
+        if ($baseUrlRaw === '') {
+            $baseUrlRaw = $provider === 'deepseek'
+                ? (string) Setting::get('deepseek_base_url', Setting::get('ai_base_url', config('services.deepseek.base_url')))
+                : (string) Setting::get('openai_base_url', Setting::get('ai_base_url', config('services.openai.base_url')));
+        }
         $baseUrl = $this->normalizeBaseUrl($baseUrlRaw, $provider);
 
         return [
